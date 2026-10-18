@@ -105,6 +105,29 @@ test("straight and triplet grids resolve to exact MIDI ticks", () => {
   assert.equal(ticksPerStep("1m"), 1920);
 });
 
+test("half-tempo export doubles note spacing and gate timing", () => {
+  const project = sampleProject("16n");
+  const normalTracks = trackChunks(createMidiFile(project));
+  const halfTempoTracks = trackChunks(createMidiFile(project, { halfTempo: true }));
+  const normalDrums = channelEvents(normalTracks[1]);
+  const halfTempoDrums = channelEvents(halfTempoTracks[1]);
+  const normalBass = channelEvents(normalTracks[2]);
+  const halfTempoBass = channelEvents(halfTempoTracks[2]);
+  const noteOns = (events) => events.filter((event) => (event.status & 0xf0) === 0x90);
+
+  assert.deepEqual(
+    noteOns(halfTempoDrums).map(({ tick }) => tick),
+    noteOns(normalDrums).map(({ tick }) => tick * 2),
+  );
+  assert.deepEqual(
+    noteOns(halfTempoBass).map(({ tick }) => tick),
+    noteOns(normalBass).map(({ tick }) => tick * 2),
+  );
+  const normalBassOff = normalBass.find((event) => event.status === 0x80);
+  const halfTempoBassOff = halfTempoBass.find((event) => event.status === 0x80);
+  assert.equal(halfTempoBassOff.tick, normalBassOff.tick * 2);
+});
+
 test("drums use channel 10 and bass preserves triplet timing and slide overlap", () => {
   const [, drumTrack, bassTrack] = trackChunks(createMidiFile(sampleProject("8t")));
   const drums = channelEvents(drumTrack);
@@ -133,6 +156,10 @@ test("variable-length values and filenames are MIDI-safe", () => {
   assert.equal(
     midiFilename({ seed: " BX / Night 01 " }, exportedAt),
     "drum-machine-sim-bx-night-01-2026-10-18T19-50-12-347Z.mid",
+  );
+  assert.equal(
+    midiFilename({ seed: " BX / Night 01 " }, exportedAt, { halfTempo: true }),
+    "drum-machine-sim-bx-night-01-half-tempo-2026-10-18T19-50-12-347Z.mid",
   );
   assert.notEqual(
     midiFilename({ seed: "repeat" }, exportedAt),

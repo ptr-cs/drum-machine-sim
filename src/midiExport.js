@@ -64,7 +64,7 @@ function namedTrack(name, events, endTick) {
   return [...asciiBytes("MTrk"), ...uint32(body.length), ...body];
 }
 
-function tempoTrack(project, endTick) {
+function tempoTrack(project, endTick, halfTempo) {
   const bpm = clamp(Number(project.bpm) || 142, 20, 400);
   const microsecondsPerBeat = Math.round(60_000_000 / bpm);
   const tempo = [
@@ -73,11 +73,19 @@ function tempoTrack(project, endTick) {
     microsecondsPerBeat & 0xff,
   ];
   const seed = asciiBytes(`Seed: ${project.seed || "untitled"}`);
-  return namedTrack("Drum Machine Sim", [
+  const events = [
     { tick: 0, priority: -1, bytes: metaEvent(0x51, tempo) },
     { tick: 0, priority: 0, bytes: metaEvent(0x58, [4, 2, 24, 8]) },
     { tick: 0, priority: 1, bytes: metaEvent(0x06, seed) },
-  ], endTick);
+  ];
+  if (halfTempo) {
+    events.push({
+      tick: 0,
+      priority: 2,
+      bytes: metaEvent(0x06, asciiBytes("Half tempo: 2x event spacing")),
+    });
+  }
+  return namedTrack("Drum Machine Sim", events, endTick);
 }
 
 function drumTrack(project, stepTicks, endTick) {
@@ -142,13 +150,13 @@ function bassTrack(project, stepTicks, endTick) {
   return namedTrack("808 Bass", events, endTick);
 }
 
-export function createMidiFile(project) {
+export function createMidiFile(project, { halfTempo = false } = {}) {
   const length = clamp(Math.round(Number(project.length) || 64), 1, 64);
   const normalizedProject = { ...project, length };
-  const stepTicks = ticksPerStep(project.rateId);
+  const stepTicks = ticksPerStep(project.rateId) * (halfTempo ? 2 : 1);
   const endTick = length * stepTicks;
   const tracks = [
-    tempoTrack(normalizedProject, endTick),
+    tempoTrack(normalizedProject, endTick, halfTempo),
     drumTrack(normalizedProject, stepTicks, endTick),
     bassTrack(normalizedProject, stepTicks, endTick),
   ];
@@ -162,7 +170,7 @@ export function createMidiFile(project) {
   return Uint8Array.from([...header, ...tracks.flat()]);
 }
 
-export function midiFilename(project, timestamp = new Date()) {
+export function midiFilename(project, timestamp = new Date(), { halfTempo = false } = {}) {
   const seed = String(project.seed || "pattern")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -170,16 +178,17 @@ export function midiFilename(project, timestamp = new Date()) {
   const exportedAt = timestamp.toISOString()
     .replaceAll(":", "-")
     .replace(".", "-");
-  return `drum-machine-sim-${seed}-${exportedAt}.mid`;
+  const mode = halfTempo ? "-half-tempo" : "";
+  return `drum-machine-sim-${seed}${mode}-${exportedAt}.mid`;
 }
 
-export function downloadMidiFile(project) {
-  const bytes = createMidiFile(project);
+export function downloadMidiFile(project, options = {}) {
+  const bytes = createMidiFile(project, options);
   const blob = new Blob([bytes], { type: "audio/midi" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = midiFilename(project);
+  anchor.download = midiFilename(project, new Date(), options);
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -509,6 +509,7 @@ function App() {
   const [meterLevel, setMeterLevel] = useState(-60);
   const [audioError, setAudioError] = useState("");
   const [tapTimes, setTapTimes] = useState([]);
+  const [midiHalfTempo, setMidiHalfTempo] = useState(false);
   const engineRef = useRef(null);
   const projectRef = useRef(project);
   const importRef = useRef(null);
@@ -927,10 +928,15 @@ function App() {
             <Icon name="dice" size={20} />
             <span><b>Generate groove</b><small>tempo · key · drums · bass</small></span>
           </button>
-          <button className="midi-export" type="button" onClick={() => downloadMidiFile(project)} title="Export separate drum and bass MIDI tracks">
-            <Icon name="download" size={17} />
-            <span><b>MIDI</b><small>3-track .mid</small></span>
-          </button>
+          <div className="midi-export-group">
+            <button className="midi-export" type="button" onClick={() => downloadMidiFile(project, { halfTempo: midiHalfTempo })} title={`Export separate drum and bass MIDI tracks${midiHalfTempo ? " at half tempo and twice the pattern length" : ""}`}>
+              <Icon name="download" size={16} />
+              <span><b>MIDI</b></span>
+            </button>
+            <button className={`midi-half-toggle ${midiHalfTempo ? "active" : ""}`} type="button" aria-pressed={midiHalfTempo} onClick={() => setMidiHalfTempo((value) => !value)} title="Double MIDI note spacing and gate lengths">
+              <b>½ tempo</b><small>{midiHalfTempo ? "2× length" : "normal"}</small>
+            </button>
+          </div>
         </div>
         <div className="rail-section genre-section"><span className="rail-label">Style</span><strong>BRONX DRILL</strong><i>v1</i></div>
         <label className="rail-field"><span>Root</span><select value={project.root} onChange={(e) => updateProject("root", e.target.value)}>{NOTE_NAMES.map((note) => <option key={note}>{note}</option>)}</select></label>
