@@ -6,6 +6,7 @@ import {
   generateBassPattern,
   generateBassSound,
   generateDrumPattern,
+  generateGrooveSettings,
   nextSeed,
 } from "./generator.js";
 import {
@@ -630,6 +631,9 @@ function App() {
       bass: project.bass,
       bassSound: project.bassSound,
       seed: project.seed,
+      bpm: project.bpm,
+      root: project.root,
+      scale: project.scale,
     });
   };
 
@@ -701,6 +705,12 @@ function App() {
   const generateGroove = () => {
     captureUndo();
     const seed = makeSeed("full-groove");
+    const groove = generateGrooveSettings({
+      seed,
+      previousBpm: project.bpm,
+      previousRoot: project.root,
+      previousScale: project.scale,
+    });
     const drums = generateDrumPattern({
       seed,
       rateId: project.rateId,
@@ -711,8 +721,8 @@ function App() {
     const bass = generateBassPattern({
       seed,
       drums,
-      root: project.root,
-      scale: project.scale,
+      root: groove.root,
+      scale: groove.scale,
       rateId: project.rateId,
       length: project.length,
       energy: project.energy,
@@ -724,7 +734,7 @@ function App() {
       pattern: bass,
       length: project.length,
     });
-    setProject((current) => ({ ...current, seed, drums, bass, bassSound }));
+    setProject((current) => ({ ...current, ...groove, seed, drums, bass, bassSound }));
   };
 
   const undoGeneration = () => {
@@ -734,6 +744,9 @@ function App() {
       bass: project.bass,
       bassSound: project.bassSound,
       seed: project.seed,
+      bpm: project.bpm,
+      root: project.root,
+      scale: project.scale,
     };
     setProject((current) => ({ ...current, ...undoSnapshot }));
     setUndoSnapshot(redo);
@@ -912,7 +925,7 @@ function App() {
         <div className="global-actions">
           <button className="global-generate" type="button" onClick={generateGroove} title="Generate drums, bass pattern, and bass sound">
             <Icon name="dice" size={20} />
-            <span><b>Generate groove</b><small>drums + bass</small></span>
+            <span><b>Generate groove</b><small>tempo · key · drums · bass</small></span>
           </button>
           <button className="midi-export" type="button" onClick={() => downloadMidiFile(project)} title="Export separate drum and bass MIDI tracks">
             <Icon name="download" size={17} />

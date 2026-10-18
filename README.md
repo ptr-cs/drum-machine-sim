@@ -42,7 +42,7 @@ The three bass buttons are deliberately independent:
 - **Generate sound** changes only the synth patch and preserves every note.
 - **Generate both** changes the pattern and sound together.
 
-The global **Generate groove** control replaces drums, bass notes, and the bass voice as one coherent, undoable operation. It generates the drums first so the new bass phrase can lock to the new kick pattern.
+The global **Generate groove** control chooses a fresh 140–150 BPM drill tempo, root, and minor-mode scale, then replaces drums, bass notes, and the bass voice as one coherent, undoable operation. It generates the drums first so the new bass phrase can lock to the new kick pattern and uses the newly selected key for every bass note.
 
 **MIDI** exports a format-1 `.mid` file with a tempo/conductor track, GM-mapped drums on channel 10, and bass on channel 1. Timing uses 480 PPQ, which represents every supported straight, sixteenth-triplet, and eighth-triplet step exactly. Bass gates, velocities, and slide overlaps are retained; portamento controllers are included for glide-aware instruments.
 

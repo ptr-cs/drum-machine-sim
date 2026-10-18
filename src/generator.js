@@ -45,6 +45,46 @@ function weighted(rng, values) {
   return values.at(-1).value;
 }
 
+const DRILL_TEMPOS = [
+  { value: 140, weight: 2 },
+  { value: 142, weight: 5 },
+  { value: 144, weight: 6 },
+  { value: 145, weight: 4 },
+  { value: 146, weight: 6 },
+  { value: 148, weight: 4 },
+  { value: 150, weight: 2 },
+];
+
+const DRILL_ROOTS = NOTE_NAMES.map((value) => ({
+  value,
+  weight: ({ C: 2, "C#": 4, D: 3, "D#": 5, E: 4, F: 4, "F#": 6, G: 5, "G#": 4, A: 3, "A#": 4, B: 2 })[value],
+}));
+
+const DRILL_SCALES = [
+  { value: "minor", weight: 7 },
+  { value: "phrygian", weight: 2.5 },
+  { value: "harmonicMinor", weight: 1.5 },
+];
+
+function withoutPrevious(values, previous) {
+  const filtered = values.filter(({ value }) => value !== previous);
+  return filtered.length ? filtered : values;
+}
+
+export function generateGrooveSettings({
+  seed,
+  previousBpm,
+  previousRoot,
+  previousScale,
+} = {}) {
+  const rng = createRng(`${seed}:groove-settings`);
+  return {
+    bpm: weighted(rng, withoutPrevious(DRILL_TEMPOS, Number(previousBpm))),
+    root: weighted(rng, withoutPrevious(DRILL_ROOTS, previousRoot)),
+    scale: weighted(rng, withoutPrevious(DRILL_SCALES, previousScale)),
+  };
+}
+
 function setHit(pattern, lane, step, velocity, length = TOTAL_STEPS) {
   if (step < 0 || step >= length) return;
   pattern[lane][step] = Math.max(pattern[lane][step], velocity);

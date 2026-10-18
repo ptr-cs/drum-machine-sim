@@ -5,9 +5,11 @@ import {
   generateBassPattern,
   generateBassSound,
   generateDrumPattern,
+  generateGrooveSettings,
 } from "../src/generator.js";
 import {
   DRUM_LANES,
+  NOTE_NAMES,
   SCALES,
   TOTAL_STEPS,
   getRate,
@@ -54,6 +56,21 @@ test("drum phrases stay in bounds and keep the drill backbeat", () => {
     assert.ok(pattern.kick.filter(Boolean).length >= 6);
     assert.ok(pattern.kick.filter(Boolean).length <= 22);
     assert.ok(pattern.openHat.every((hit, step) => !hit || !pattern.closedHat[step]));
+  }
+});
+
+test("groove settings choose fresh drill tempos, roots, and minor modes", () => {
+  const previous = { previousBpm: 142, previousRoot: "F#", previousScale: "minor" };
+  for (let index = 0; index < 120; index += 1) {
+    const options = { seed: `groove-settings-${index}`, ...previous };
+    const settings = generateGrooveSettings(options);
+    assert.deepEqual(settings, generateGrooveSettings(options));
+    assert.ok([140, 142, 144, 145, 146, 148, 150].includes(settings.bpm));
+    assert.ok(NOTE_NAMES.includes(settings.root));
+    assert.ok(Object.hasOwn(SCALES, settings.scale));
+    assert.notEqual(settings.bpm, previous.previousBpm);
+    assert.notEqual(settings.root, previous.previousRoot);
+    assert.notEqual(settings.scale, previous.previousScale);
   }
 });
 
