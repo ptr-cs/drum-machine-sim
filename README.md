@@ -25,7 +25,7 @@ npm run build
 - Exact Tone.js timing for `1/32`, `1/16T`, `1/16`, `1/8T`, `1/8`, `1/4`, `1/2`, and whole-note steps
 - 11 synthesized percussion voices: kick, snare, clap, closed/open hats, rim, low/mid/high toms, cowbell, and cymbal
 - Voice-specific level, tone, and decay controls; mute and audition per lane
-- Continuous monophonic 808 bass voice with pitch drop, gate length, glide, saturation, filter, sub oscillator, and master limiting
+- Continuous monophonic 808 bass voice with pitch drop, gates up to the remaining phrase length, glide, extended decay, saturation, a dedicated low-mid Body stage, sub oscillator, and master limiting
 - Scale/key-constrained bass-note editing
 - Local autosave, JSON project import/export, and multitrack Standard MIDI File export
 - Desktop and responsive layouts, keyboard transport (`Space`), and instrument switching (`1` / `2`)

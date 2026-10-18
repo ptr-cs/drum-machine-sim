@@ -699,6 +699,7 @@ export function generateBassSound({
   length = TOTAL_STEPS,
 } = {}) {
   const rng = createRng(`${seed}:bass-sound`);
+  const bodyRng = createRng(`${seed}:bass-body`);
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const events = Array.isArray(pattern) ? pattern.slice(0, usableLength(length)).filter(Boolean) : [];
   const density = events.length / usableLength(length);
@@ -712,54 +713,59 @@ export function generateBassSound({
     { value: "long-slide", weight: slideRatio > 0.12 ? 6 : density < 0.16 ? 3 : 1 },
   ]);
   const randomBetween = (minimum, maximum) => minimum + rng() * (maximum - minimum);
+  const randomBodyBetween = (minimum, maximum) => minimum + bodyRng() * (maximum - minimum);
   const presets = {
     round: {
       wave: "sine",
       attack: randomBetween(0.004, 0.011),
-      decay: randomBetween(0.82, 1.5),
+      decay: randomBetween(0.9, 2.8),
       glide: randomBetween(0.06, 0.135),
       punch: randomBetween(14, 24),
       pitchDecay: randomBetween(0.028, 0.056),
       cutoff: randomBetween(190, 430),
-      drive: randomBetween(0.08, 0.29),
+      drive: randomBetween(0.12, 0.4),
+      body: randomBodyBetween(0.38, 0.64),
       sub: randomBetween(0.24, 0.5),
-      level: randomBetween(0.74, 0.86),
+      level: randomBetween(0.78, 1.02),
     },
     knock: {
       wave: "sine",
       attack: randomBetween(0.002, 0.006),
-      decay: randomBetween(0.42, 0.88),
+      decay: randomBetween(0.48, 1.18),
       glide: randomBetween(0.035, 0.09),
       punch: randomBetween(23, 35),
       pitchDecay: randomBetween(0.018, 0.038),
       cutoff: randomBetween(300, 680),
-      drive: randomBetween(0.12, 0.38),
+      drive: randomBetween(0.2, 0.54),
+      body: randomBodyBetween(0.52, 0.78),
       sub: randomBetween(0.15, 0.34),
-      level: randomBetween(0.72, 0.84),
+      level: randomBetween(0.8, 1.08),
     },
     growl: {
       wave: rng() < 0.78 ? "triangle" : "sine",
       attack: randomBetween(0.003, 0.009),
-      decay: randomBetween(0.58, 1.15),
+      decay: randomBetween(0.7, 2.1),
       glide: randomBetween(0.055, 0.14),
       punch: randomBetween(16, 28),
       pitchDecay: randomBetween(0.024, 0.052),
       cutoff: randomBetween(420, 840),
-      drive: randomBetween(0.36, 0.66),
+      drive: randomBetween(0.46, 0.9),
+      body: randomBodyBetween(0.7, 1),
       sub: randomBetween(0.12, 0.32),
-      level: randomBetween(0.62, 0.76),
+      level: randomBetween(0.78, 1.14),
     },
     "long-slide": {
       wave: "sine",
       attack: randomBetween(0.005, 0.013),
-      decay: randomBetween(1.08, 1.78),
+      decay: randomBetween(1.6, 4.45),
       glide: randomBetween(0.105, 0.2),
       punch: randomBetween(12, 21),
       pitchDecay: randomBetween(0.032, 0.065),
       cutoff: randomBetween(175, 440),
-      drive: randomBetween(0.1, 0.35),
+      drive: randomBetween(0.16, 0.48),
+      body: randomBodyBetween(0.42, 0.72),
       sub: randomBetween(0.26, 0.53),
-      level: randomBetween(0.68, 0.81),
+      level: randomBetween(0.76, 1.02),
     },
   };
   const selected = presets[archetype];
@@ -767,21 +773,22 @@ export function generateBassSound({
     selected.decay = Math.min(selected.decay, 0.9);
     selected.glide = Math.min(selected.glide, 0.12);
   } else if (events.length && density < 0.12) {
-    selected.decay = Math.max(selected.decay, 0.92);
+    selected.decay = Math.max(selected.decay, 1.4);
   }
   return {
     ...DEFAULT_BASS_SOUND,
     archetype,
     wave: selected.wave,
     attack: Number(clamp(selected.attack, 0.002, 0.025).toFixed(3)),
-    decay: Number(clamp(selected.decay, 0.25, 1.8).toFixed(2)),
+    decay: Number(clamp(selected.decay, 0.25, 4.5).toFixed(2)),
     glide: Number(clamp(selected.glide, 0.02, 0.24).toFixed(3)),
     punch: Math.round(clamp(selected.punch, 8, 36)),
     pitchDecay: Number(clamp(selected.pitchDecay, 0.018, 0.075).toFixed(3)),
     cutoff: Math.round(clamp(selected.cutoff, 120, 900)),
-    drive: Number(clamp(selected.drive + energy * 0.025, 0, 0.68).toFixed(2)),
+    drive: Number(clamp(selected.drive + energy * 0.04, 0, 0.95).toFixed(2)),
+    body: Number(clamp(selected.body + energy * 0.06, 0, 1).toFixed(2)),
     sub: Number(clamp(selected.sub, 0, 0.58).toFixed(2)),
-    level: Number(clamp(selected.level, 0.35, 0.95).toFixed(2)),
+    level: Number(clamp(selected.level + energy * 0.025, 0.35, 1.2).toFixed(2)),
   };
 }
 

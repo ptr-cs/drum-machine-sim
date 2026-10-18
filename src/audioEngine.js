@@ -9,15 +9,15 @@ class BassVoice {
     this.subOsc = new Tone.Oscillator(27.5, "sine");
     this.mainLevel = new Tone.Gain(0.9);
     this.subLevel = new Tone.Gain(0.28);
+    this.bodyFilter = new Tone.Filter({ frequency: 155, type: "peaking", Q: 0.8, gain: 0 });
     this.amplitude = new Tone.Gain(0.0001);
     this.filter = new Tone.Filter({ frequency: 360, type: "lowpass", rolloff: -24, Q: 0.7 });
     this.distortion = new Tone.Distortion({ distortion: 0.24, oversample: "2x", wet: 0.36 });
     this.highpass = new Tone.Filter({ frequency: 22, type: "highpass", rolloff: -12, Q: 0.4 });
     this.output = new Tone.Gain(0.78);
 
-    this.mainOsc.connect(this.mainLevel);
+    this.mainOsc.chain(this.mainLevel, this.bodyFilter, this.amplitude);
     this.subOsc.connect(this.subLevel);
-    this.mainLevel.connect(this.amplitude);
     this.subLevel.connect(this.amplitude);
     this.amplitude.chain(this.filter, this.distortion, this.highpass, this.output, destination);
     this.mainOsc.start();
@@ -35,11 +35,16 @@ class BassVoice {
       this.mainOsc.type = sound.wave;
     }
     this.subOsc.type = "sine";
+    const body = Math.max(0, Math.min(1, sound.body ?? 0.42));
+    const drive = Math.max(0, Math.min(0.95, sound.drive));
+    const level = Math.max(0.35, Math.min(1.25, sound.level));
+    this.mainLevel.gain.rampTo(0.9 + body * 0.5, ramp, now);
+    this.bodyFilter.gain.rampTo(body * 9, ramp, now);
     this.subLevel.gain.rampTo(sound.sub, ramp, now);
     this.filter.frequency.rampTo(sound.cutoff, ramp, now);
-    this.distortion.distortion = sound.drive;
-    this.distortion.wet.rampTo(Math.min(0.68, 0.14 + sound.drive * 0.9), ramp, now);
-    this.output.gain.rampTo(sound.level * (1 - sound.drive * 0.22), ramp, now);
+    this.distortion.distortion = drive;
+    this.distortion.wet.rampTo(Math.min(0.82, 0.14 + drive * 0.78 + body * 0.08), ramp, now);
+    this.output.gain.rampTo(level * (1 - drive * 0.08), ramp, now);
     this.currentSound = { ...sound };
   }
 
@@ -94,6 +99,7 @@ class BassVoice {
       this.subOsc,
       this.mainLevel,
       this.subLevel,
+      this.bodyFilter,
       this.amplitude,
       this.filter,
       this.distortion,

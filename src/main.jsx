@@ -84,6 +84,7 @@ function loadProject() {
       ...fallback,
       ...stored,
       drums: { ...fallback.drums, ...stored.drums },
+      bassSound: { ...fallback.bassSound, ...stored.bassSound },
       drumSettings: Object.fromEntries(
         DRUM_LANES.map(({ id }) => [
           id,
@@ -416,15 +417,16 @@ function BassSoundBay({ project, onParam, onWave, onAudition }) {
           <button type="button" key={wave} className={sound.wave === wave ? "active" : ""} onClick={() => onWave(wave)}>{wave}</button>
         ))}
       </div>
-      <div className="knob-rack four bass-knobs">
-        <Knob accent="blue" label="Decay" value={sound.decay} min={0.25} max={1.8} step={0.01} onChange={(value) => onParam("decay", value)} format={(value) => `${value.toFixed(2)}s`} />
+      <div className="knob-rack bass-knobs">
+        <Knob accent="blue" label="Decay" value={sound.decay} min={0.25} max={4.5} step={0.01} onChange={(value) => onParam("decay", value)} format={(value) => `${value.toFixed(2)}s`} />
         <Knob accent="blue" label="Glide" value={sound.glide} min={0.02} max={0.24} step={0.005} onChange={(value) => onParam("glide", value)} format={(value) => `${Math.round(value * 1000)}ms`} />
         <Knob accent="blue" label="Punch" value={sound.punch} min={8} max={36} step={1} onChange={(value) => onParam("punch", value)} format={(value) => `${Math.round(value)}st`} />
         <Knob accent="blue" label="Tone" value={sound.cutoff} min={120} max={900} step={5} onChange={(value) => onParam("cutoff", value)} format={(value) => `${Math.round(value)}Hz`} />
-        <Knob accent="blue" label="Drive" value={sound.drive} min={0} max={0.7} onChange={(value) => onParam("drive", value)} format={(value) => `${Math.round(value * 100)}%`} />
+        <Knob accent="blue" label="Drive" value={sound.drive} min={0} max={0.95} onChange={(value) => onParam("drive", value)} format={(value) => `${Math.round(value * 100)}%`} />
+        <Knob accent="blue" label="Body" value={sound.body ?? DEFAULT_BASS_SOUND.body} min={0} max={1} onChange={(value) => onParam("body", value)} format={(value) => `${Math.round(value * 100)}%`} />
         <Knob accent="blue" label="Sub" value={sound.sub} min={0} max={0.58} onChange={(value) => onParam("sub", value)} format={(value) => `${Math.round(value * 100)}%`} />
         <Knob accent="blue" label="Attack" value={sound.attack} min={0.002} max={0.025} step={0.001} onChange={(value) => onParam("attack", value)} format={(value) => `${Math.round(value * 1000)}ms`} />
-        <Knob accent="blue" label="Level" value={sound.level} min={0.35} max={0.95} onChange={(value) => onParam("level", value)} format={(value) => `${Math.round(value * 100)}`} />
+        <Knob accent="blue" label="Level" value={sound.level} min={0.35} max={1.25} onChange={(value) => onParam("level", value)} format={(value) => `${Math.round(value * 100)}`} />
       </div>
       <button className="audition-wide" type="button" onClick={onAudition}>Hold test note <b>{midiToNote(getRootMidi(project.root))}</b></button>
     </aside>
@@ -464,7 +466,7 @@ function BassGeneratorBay({ project, summary, onGeneratePattern, onGenerateSound
   );
 }
 
-function BassStepInspector({ event, step, onChange, onDelete, onAudition }) {
+function BassStepInspector({ event, step, maxGate, onChange, onDelete, onAudition }) {
   if (step === null || !event) {
     return (
       <div className="step-inspector empty">
@@ -482,7 +484,7 @@ function BassStepInspector({ event, step, onChange, onDelete, onAudition }) {
       </div>
       <div className="inspector-fields">
         <label>Pitch<select value={event.note} onChange={(e) => onChange("note", e.target.value)}>{noteOptions.map((note) => <option key={note}>{note}</option>)}</select></label>
-        <label>Gate<output>{event.length} steps</output><input type="range" min="1" max="16" value={event.length} onChange={(e) => onChange("length", Number(e.target.value))} /></label>
+        <label>Gate<output>{event.length} steps</output><input type="range" min="1" max={maxGate} value={Math.min(event.length, maxGate)} onChange={(e) => onChange("length", Number(e.target.value))} /></label>
         <label>Velocity<output>{Math.round(event.velocity * 100)}%</output><input type="range" min="0.35" max="1" step="0.01" value={event.velocity} onChange={(e) => onChange("velocity", Number(e.target.value))} /></label>
         <label className="slide-toggle"><input type="checkbox" checked={event.slide} onChange={(e) => onChange("slide", e.target.checked)} /><span>Glide into this note</span></label>
       </div>
@@ -854,7 +856,12 @@ function App() {
       const parsed = JSON.parse(await file.text());
       if (!parsed.drums || !parsed.bass || !parsed.bassSound) throw new Error("Not an 808 Drill Lab file.");
       const fallback = createStarterProject();
-      setProject({ ...fallback, ...parsed, version: 1 });
+      setProject({
+        ...fallback,
+        ...parsed,
+        bassSound: { ...fallback.bassSound, ...parsed.bassSound },
+        version: 1,
+      });
       setPlayhead(-1);
       setAudioError("");
     } catch (error) {
@@ -965,7 +972,7 @@ function App() {
                   <div className="bay-topline"><div><span className="bay-kicker">sequence</span><h3>Pitch lane</h3></div><button className={`bass-mute ${project.bassMuted ? "active" : ""}`} type="button" onClick={() => updateProject("bassMuted", !project.bassMuted)}>MUTE BASS</button></div>
                   <BassGrid project={project} bank={bank} playhead={playhead} selectedStep={selectedBassStep} onSelectStep={selectBassStep} onDeleteStep={deleteBassStep} />
                 </section>
-                <BassStepInspector event={selectedEvent} step={selectedBassStep} onChange={changeBassEvent} onDelete={() => deleteBassStep()} onAudition={auditionBass} />
+                <BassStepInspector event={selectedEvent} step={selectedBassStep} maxGate={Math.max(1, project.length - (selectedBassStep ?? 0))} onChange={changeBassEvent} onDelete={() => deleteBassStep()} onAudition={auditionBass} />
               </section>
               <BassGeneratorBay project={project} summary={summary} onGeneratePattern={generatePattern} onGenerateSound={generateSound} onGenerateBoth={generateBoth} onUpdate={updateProject} canUndo={Boolean(undoSnapshot)} onUndo={undoGeneration} />
             </div>

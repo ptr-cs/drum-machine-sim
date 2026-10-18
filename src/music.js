@@ -58,6 +58,7 @@ export const DEFAULT_BASS_SOUND = {
   pitchDecay: 0.038,
   cutoff: 360,
   drive: 0.24,
+  body: 0.42,
   sub: 0.28,
   level: 0.78,
 };

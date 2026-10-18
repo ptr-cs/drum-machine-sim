@@ -105,18 +105,26 @@ test("bass output stays tonal, monophonic, sparse, and related to the kick", () 
 });
 
 test("generated bass sounds stay inside safe, useful synthesis ranges", () => {
+  let foundLongDecay = false;
+  let foundAggressiveLevel = false;
   for (let index = 0; index < 300; index += 1) {
     const patch = generateBassSound({ seed: `sound-${index}`, energy: index / 299 });
     assert.ok(["sine", "triangle"].includes(patch.wave));
     assert.ok(["round", "knock", "growl", "long-slide"].includes(patch.archetype));
     assert.ok(patch.attack >= 0.002 && patch.attack <= 0.025);
-    assert.ok(patch.decay >= 0.25 && patch.decay <= 1.8);
+    assert.ok(patch.decay >= 0.25 && patch.decay <= 4.5);
     assert.ok(patch.glide >= 0.02 && patch.glide <= 0.24);
     assert.ok(patch.punch >= 8 && patch.punch <= 36);
     assert.ok(patch.cutoff >= 120 && patch.cutoff <= 900);
-    assert.ok(patch.drive >= 0 && patch.drive <= 0.7);
-    assert.ok(patch.level >= 0.35 && patch.level <= 0.95);
+    assert.ok(patch.drive >= 0 && patch.drive <= 0.95);
+    assert.ok(patch.body >= 0 && patch.body <= 1);
+    assert.ok(patch.sub >= 0 && patch.sub <= 0.58);
+    assert.ok(patch.level >= 0.35 && patch.level <= 1.2);
+    foundLongDecay ||= patch.decay > 1.8;
+    foundAggressiveLevel ||= patch.level > 0.95;
   }
+  assert.ok(foundLongDecay, "generator should reach the extended decay range");
+  assert.ok(foundAggressiveLevel, "generator should reach the extended output range");
 
   const sparse = Array(64).fill(null);
   [0, 16, 32, 48].forEach((step) => { sparse[step] = { slide: false }; });
