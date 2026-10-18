@@ -129,5 +129,5 @@ test("variable-length values and filenames are MIDI-safe", () => {
   assert.deepEqual(encodeVariableLength(127), [127]);
   assert.deepEqual(encodeVariableLength(128), [0x81, 0x00]);
   assert.deepEqual(encodeVariableLength(16_383), [0xff, 0x7f]);
-  assert.equal(midiFilename({ seed: " BX / Night 01 " }), "808-drill-bx-night-01.mid");
+  assert.equal(midiFilename({ seed: " BX / Night 01 " }), "drum-machine-sim-bx-night-01.mid");
 });

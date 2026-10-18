@@ -73,7 +73,7 @@ function tempoTrack(project, endTick) {
     microsecondsPerBeat & 0xff,
   ];
   const seed = asciiBytes(`Seed: ${project.seed || "untitled"}`);
-  return namedTrack("808 Drill Lab", [
+  return namedTrack("Drum Machine Sim", [
     { tick: 0, priority: -1, bytes: metaEvent(0x51, tempo) },
     { tick: 0, priority: 0, bytes: metaEvent(0x58, [4, 2, 24, 8]) },
     { tick: 0, priority: 1, bytes: metaEvent(0x06, seed) },
@@ -167,7 +167,7 @@ export function midiFilename(project) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "pattern";
-  return `808-drill-${seed}.mid`;
+  return `drum-machine-sim-${seed}.mid`;
 }
 
 export function downloadMidiFile(project) {

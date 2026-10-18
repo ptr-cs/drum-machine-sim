@@ -857,7 +857,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `808-drill-${project.seed.toLowerCase()}.json`;
+    anchor.download = `drum-machine-sim-${project.seed.toLowerCase()}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -867,7 +867,7 @@ function App() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      if (!parsed.drums || !parsed.bass || !parsed.bassSound) throw new Error("Not an 808 Drill Lab file.");
+      if (!parsed.drums || !parsed.bass || !parsed.bassSound) throw new Error("Not a Drum Machine Sim file.");
       const fallback = createStarterProject();
       setProject({
         ...fallback,
@@ -892,7 +892,7 @@ function App() {
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark"><span>8</span><span>0</span><span>8</span></div>
-          <div><h1>Drill Lab</h1><p>bass + rhythm synthesizer</p></div>
+          <div><h1>Drum Machine Sim</h1><p>bass + rhythm synthesizer</p></div>
           <span className="local-badge">LOCAL</span>
         </div>
 

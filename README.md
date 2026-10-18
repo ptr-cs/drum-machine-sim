@@ -1,4 +1,4 @@
-# 808 Drill Lab
+# Drum Machine Sim
 
 A local, synthesized 808 bass and percussion instrument with a shared 64-step sequencer. It is built with React, Vite, and Tone.js and does not use drum samples or a hosted backend.
 
