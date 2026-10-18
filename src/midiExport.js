@@ -162,12 +162,15 @@ export function createMidiFile(project) {
   return Uint8Array.from([...header, ...tracks.flat()]);
 }
 
-export function midiFilename(project) {
+export function midiFilename(project, timestamp = new Date()) {
   const seed = String(project.seed || "pattern")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "pattern";
-  return `drum-machine-sim-${seed}.mid`;
+  const exportedAt = timestamp.toISOString()
+    .replaceAll(":", "-")
+    .replace(".", "-");
+  return `drum-machine-sim-${seed}-${exportedAt}.mid`;
 }
 
 export function downloadMidiFile(project) {

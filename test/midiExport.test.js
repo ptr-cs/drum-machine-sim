@@ -129,5 +129,13 @@ test("variable-length values and filenames are MIDI-safe", () => {
   assert.deepEqual(encodeVariableLength(127), [127]);
   assert.deepEqual(encodeVariableLength(128), [0x81, 0x00]);
   assert.deepEqual(encodeVariableLength(16_383), [0xff, 0x7f]);
-  assert.equal(midiFilename({ seed: " BX / Night 01 " }), "drum-machine-sim-bx-night-01.mid");
+  const exportedAt = new Date("2026-10-18T19:50:12.347Z");
+  assert.equal(
+    midiFilename({ seed: " BX / Night 01 " }, exportedAt),
+    "drum-machine-sim-bx-night-01-2026-10-18T19-50-12-347Z.mid",
+  );
+  assert.notEqual(
+    midiFilename({ seed: "repeat" }, exportedAt),
+    midiFilename({ seed: "repeat" }, new Date(exportedAt.getTime() + 1)),
+  );
 });
