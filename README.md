@@ -27,7 +27,7 @@ npm run build
 - Voice-specific level, tone, and decay controls; mute and audition per lane
 - Continuous monophonic 808 bass voice with pitch drop, gate length, glide, saturation, filter, sub oscillator, and master limiting
 - Scale/key-constrained bass-note editing
-- Local autosave plus JSON import/export
+- Local autosave, JSON project import/export, and multitrack Standard MIDI File export
 - Desktop and responsive layouts, keyboard transport (`Space`), and instrument switching (`1` / `2`)
 
 ## Generative controls
@@ -41,6 +41,10 @@ The three bass buttons are deliberately independent:
 - **Generate pattern** changes notes, rhythm, velocity, gate, and slides but preserves the current sound.
 - **Generate sound** changes only the synth patch and preserves every note.
 - **Generate both** changes the pattern and sound together.
+
+The global **Generate groove** control replaces drums, bass notes, and the bass voice as one coherent, undoable operation. It generates the drums first so the new bass phrase can lock to the new kick pattern.
+
+**MIDI** exports a format-1 `.mid` file with a tempo/conductor track, GM-mapped drums on channel 10, and bass on channel 1. Timing uses 480 PPQ, which represents every supported straight, sixteenth-triplet, and eighth-triplet step exactly. Bass gates, velocities, and slide overlaps are retained; portamento controllers are included for glide-aware instruments.
 
 Every generation can be undone, and generated state is reproducible through the seed and exported project JSON.
 
@@ -64,6 +68,7 @@ The original TR-808 did not include a chromatic melodic bass synth. The bass wor
 - `src/audioEngine.js` — Tone.js synthesis, drum rack, bass voice, and scheduling
 - `src/generator.js` — seeded drum, bass-pattern, and bass-sound generation
 - `src/music.js` — timing, scales, voices, and shared musical constants
+- `src/midiExport.js` — dependency-free multitrack Standard MIDI File encoder
 - `src/styles.css` — instrument chassis and responsive styling
 - `test/generator.test.js` — deterministic and musical-boundary tests across hundreds of seeds
 

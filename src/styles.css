@@ -437,6 +437,71 @@ input[type="range"] {
   text-transform: uppercase;
 }
 
+.global-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 7px;
+  padding: 9px 12px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.global-actions button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 132px;
+  padding: 8px 12px;
+  border: 1px solid #545954;
+  border-radius: 5px;
+  color: #e5e4dd;
+  background: linear-gradient(145deg, #252825, #171918);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 4px 10px rgba(0, 0, 0, 0.22);
+  text-align: left;
+}
+
+.global-actions button:hover {
+  border-color: #969a94;
+  transform: translateY(-1px);
+}
+
+.global-actions button span,
+.global-actions button b,
+.global-actions button small {
+  display: block;
+}
+
+.global-actions button b {
+  font-family: "Arial Narrow", Impact, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.global-actions button small {
+  margin-top: 2px;
+  color: rgba(9, 15, 15, 0.62);
+  font-size: 8px;
+}
+
+.global-actions .global-generate {
+  min-width: 168px;
+  border-color: #d17629;
+  color: #201309;
+  background: linear-gradient(145deg, #ffc05f, #ec821e);
+}
+
+.global-actions .midi-export {
+  min-width: 116px;
+  border-color: #3eaccd;
+  color: #07171c;
+  background: linear-gradient(145deg, #8ce8ff, #32afd5);
+}
+
+.global-actions svg {
+  flex: 0 0 auto;
+}
+
 .error-banner {
   position: sticky;
   z-index: 25;

@@ -23,6 +23,7 @@ import {
   phraseLengthLabel,
   stepGroupSize,
 } from "./music.js";
+import { downloadMidiFile } from "./midiExport.js";
 import "./styles.css";
 
 const STORAGE_KEY = "808-drill-lab:v1";
@@ -695,6 +696,35 @@ function App() {
     setProject((current) => ({ ...current, seed, bass, bassSound }));
   };
 
+  const generateGroove = () => {
+    captureUndo();
+    const seed = makeSeed("full-groove");
+    const drums = generateDrumPattern({
+      seed,
+      rateId: project.rateId,
+      length: project.length,
+      energy: project.energy,
+      variation: project.variation,
+    });
+    const bass = generateBassPattern({
+      seed,
+      drums,
+      root: project.root,
+      scale: project.scale,
+      rateId: project.rateId,
+      length: project.length,
+      energy: project.energy,
+      slides: project.slides,
+    });
+    const bassSound = generateBassSound({
+      seed,
+      energy: project.energy,
+      pattern: bass,
+      length: project.length,
+    });
+    setProject((current) => ({ ...current, seed, drums, bass, bassSound }));
+  };
+
   const undoGeneration = () => {
     if (!undoSnapshot) return;
     const redo = {
@@ -872,6 +902,16 @@ function App() {
       </header>
 
       <section className="control-rail" aria-label="Pattern settings">
+        <div className="global-actions">
+          <button className="global-generate" type="button" onClick={generateGroove} title="Generate drums, bass pattern, and bass sound">
+            <Icon name="dice" size={20} />
+            <span><b>Generate groove</b><small>drums + bass</small></span>
+          </button>
+          <button className="midi-export" type="button" onClick={() => downloadMidiFile(project)} title="Export separate drum and bass MIDI tracks">
+            <Icon name="download" size={17} />
+            <span><b>MIDI</b><small>3-track .mid</small></span>
+          </button>
+        </div>
         <div className="rail-section genre-section"><span className="rail-label">Style</span><strong>BRONX DRILL</strong><i>v1</i></div>
         <label className="rail-field"><span>Root</span><select value={project.root} onChange={(e) => updateProject("root", e.target.value)}>{NOTE_NAMES.map((note) => <option key={note}>{note}</option>)}</select></label>
         <label className="rail-field scale-field"><span>Scale</span><select value={project.scale} onChange={(e) => updateProject("scale", e.target.value)}>{Object.entries(SCALES).map(([id, scale]) => <option key={id} value={id}>{scale.label}</option>)}</select></label>
