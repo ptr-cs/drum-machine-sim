@@ -10,9 +10,11 @@ import {
   DRUM_LANES,
   SCALES,
   TOTAL_STEPS,
+  getRate,
   getRootMidi,
   noteToMidi,
   phraseLengthLabel,
+  stepGroupSize,
 } from "../src/music.js";
 
 test("seeded RNG and generators are deterministic", () => {
@@ -56,7 +58,7 @@ test("drum phrases stay in bounds and keep the drill backbeat", () => {
 });
 
 test("active length is respected across each supported grid", () => {
-  for (const rateId of ["32n", "16t", "16n", "8n", "4n", "2n", "1m"]) {
+  for (const rateId of ["32n", "16t", "16n", "8t", "8n", "4n", "2n", "1m"]) {
     const length = rateId === "16t" ? 48 : 24;
     const drums = generateDrumPattern({ seed: rateId, rateId, length });
     for (const { id } of DRUM_LANES) {
@@ -129,4 +131,9 @@ test("phrase labels explain straight and triplet loop lengths", () => {
   assert.equal(phraseLengthLabel(64, "16n"), "4 bars");
   assert.equal(phraseLengthLabel(48, "16t"), "2 bars");
   assert.equal(phraseLengthLabel(64, "16t"), "2 ⅔ bars");
+  assert.equal(phraseLengthLabel(24, "8t"), "2 bars");
+  assert.equal(phraseLengthLabel(64, "8t"), "5 ⅓ bars");
+  assert.equal(getRate("8t").tone, "8t");
+  assert.equal(getRate("8t").beats, 1 / 3);
+  assert.equal(stepGroupSize("8t"), 3);
 });

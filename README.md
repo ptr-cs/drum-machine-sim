@@ -22,7 +22,7 @@ npm run build
 
 - 64 total steps with 16-step edit banks and a full-pattern overview
 - Active lengths of 16, 24, 32, 48, or 64 steps
-- Exact Tone.js timing for `1/32`, `1/16T`, `1/16`, `1/8`, `1/4`, `1/2`, and whole-note steps
+- Exact Tone.js timing for `1/32`, `1/16T`, `1/16`, `1/8T`, `1/8`, `1/4`, `1/2`, and whole-note steps
 - 11 synthesized percussion voices: kick, snare, clap, closed/open hats, rim, low/mid/high toms, cowbell, and cymbal
 - Voice-specific level, tone, and decay controls; mute and audition per lane
 - Continuous monophonic 808 bass voice with pitch drop, gate length, glide, saturation, filter, sub oscillator, and master limiting
@@ -32,7 +32,7 @@ npm run build
 
 ## Generative controls
 
-The drum generator uses a constrained drill rhythm grammar: a half-time snare anchor, sparse syncopated kicks, alternating hats, occasional rolls, open-hat calls, and restrained secondary percussion. It composes in beat time and then quantizes to the selected grid, so `1/16T` is a real triplet grid rather than a visual approximation.
+The drum generator uses a constrained drill rhythm grammar: a half-time snare anchor, sparse syncopated kicks, alternating hats, occasional rolls, open-hat calls, and restrained secondary percussion. It composes in beat time and then quantizes to the selected grid, so both `1/16T` and `1/8T` are real triplet grids rather than visual approximations.
 
 The bass generator follows existing kick accents, stays in the selected scale, favors tonic-centered motifs, enforces breathing room, and limits slides to useful transitions. Every result is deterministic from the visible seed.
 

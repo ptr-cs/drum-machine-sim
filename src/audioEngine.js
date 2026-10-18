@@ -330,7 +330,11 @@ export class AudioEngine {
     const transport = Tone.getTransport();
     transport.bpm.rampTo(bpm, 0.04);
     transport.swing = Math.max(0, Math.min(0.65, swing));
-    transport.swingSubdivision = this.rateId === "16t" ? "8n" : "16n";
+    transport.swingSubdivision = this.rateId === "16t"
+      ? "8n"
+      : this.rateId === "8t"
+        ? "4n"
+        : "16n";
     if (this.input) this.input.gain.rampTo(master, 0.03);
   }
 
@@ -339,7 +343,11 @@ export class AudioEngine {
     if (this.transportEvent !== null) transport.clear(this.transportEvent);
     this.rateId = rateId;
     const subdivision = getRate(rateId).tone;
-    transport.swingSubdivision = rateId === "16t" ? "8n" : "16n";
+    transport.swingSubdivision = rateId === "16t"
+      ? "8n"
+      : rateId === "8t"
+        ? "4n"
+        : "16n";
     this.transportEvent = transport.scheduleRepeat((time) => {
       const state = this.getState?.();
       if (!state) return;

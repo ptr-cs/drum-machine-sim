@@ -4,6 +4,7 @@ export const STEP_RATES = [
   { id: "32n", label: "1/32", tone: "32n", beats: 0.125 },
   { id: "16t", label: "1/16T", tone: "16t", beats: 1 / 6 },
   { id: "16n", label: "1/16", tone: "16n", beats: 0.25 },
+  { id: "8t", label: "1/8T", tone: "8t", beats: 1 / 3 },
   { id: "8n", label: "1/8", tone: "8n", beats: 0.5 },
   { id: "4n", label: "1/4", tone: "4n", beats: 1 },
   { id: "2n", label: "1/2", tone: "2n", beats: 2 },
@@ -121,6 +122,7 @@ export function phraseLengthLabel(stepCount, rateId) {
 
 export function stepGroupSize(rateId) {
   if (rateId === "16t") return 6;
+  if (rateId === "8t") return 3;
   if (rateId === "32n") return 8;
   if (rateId === "16n") return 4;
   if (rateId === "8n") return 2;
