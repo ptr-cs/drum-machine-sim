@@ -6,10 +6,13 @@ import {
   generateBassSound,
   generateDrumPattern,
   generateGrooveSettings,
+  generateMelodyPattern,
+  melodySummary,
 } from "../src/generator.js";
 import {
   DRUM_LANES,
   NOTE_NAMES,
+  PATTERN_LENGTHS,
   SCALES,
   TOTAL_STEPS,
   getRate,
@@ -29,6 +32,10 @@ test("seeded RNG and generators are deterministic", () => {
 
   const options = { seed: "BX-TEST", rateId: "16n", length: 64, energy: 0.7, variation: 0.55 };
   assert.deepEqual(generateDrumPattern(options), generateDrumPattern(options));
+  const drums = generateDrumPattern(options);
+  const bass = generateBassPattern({ ...options, drums, root: "F#", scale: "minor" });
+  const melodyOptions = { ...options, drums, bass, root: "F#", scale: "minor" };
+  assert.deepEqual(generateMelodyPattern(melodyOptions), generateMelodyPattern(melodyOptions));
   assert.deepEqual(
     generateBassSound({ seed: "BX-TEST", energy: 0.7 }),
     generateBassSound({ seed: "BX-TEST", energy: 0.7 }),
@@ -76,15 +83,37 @@ test("groove settings choose fresh drill tempos, roots, and minor modes", () => 
 
 test("active length is respected across each supported grid", () => {
   for (const rateId of ["32n", "16t", "16n", "8t", "8n", "4n", "2n", "1m"]) {
-    const length = rateId === "16t" ? 48 : 24;
-    const drums = generateDrumPattern({ seed: rateId, rateId, length });
-    for (const { id } of DRUM_LANES) {
-      assert.ok(drums[id].slice(length).every((velocity) => velocity === 0));
+    for (const length of PATTERN_LENGTHS) {
+      const seed = `${rateId}-${length}`;
+      const drums = generateDrumPattern({ seed, rateId, length });
+      for (const { id } of DRUM_LANES) {
+        assert.ok(drums[id].slice(length).every((velocity) => velocity === 0));
+      }
+      const bass = generateBassPattern({ seed, drums, rateId, length, root: "F#", scale: "minor" });
+      assert.equal(bass.length, TOTAL_STEPS);
+      assert.ok(bass.slice(length).every((event) => event === null));
+      assert.ok(bass.slice(0, length).some(Boolean));
+      const melody = generateMelodyPattern({
+        seed,
+        drums,
+        bass,
+        rateId,
+        length,
+        root: "F#",
+        scale: "minor",
+      });
+      assert.equal(melody.length, TOTAL_STEPS);
+      assert.ok(melody.slice(length).every((event) => event === null));
+      assert.ok(melody.slice(0, length).some(Boolean));
+      const active = melody.slice(0, length).map((event, step) => (
+        event ? { event, step } : null
+      )).filter(Boolean);
+      active.forEach(({ event, step }, index) => {
+        const nextStep = active[index + 1]?.step ?? length;
+        assert.ok(event.midi >= 55 && event.midi <= 84);
+        assert.ok(event.length >= 1 && event.length <= nextStep - step);
+      });
     }
-    const bass = generateBassPattern({ seed: rateId, drums, rateId, length, root: "F#", scale: "minor" });
-    assert.equal(bass.length, TOTAL_STEPS);
-    assert.ok(bass.slice(length).every((event) => event === null));
-    assert.ok(bass.slice(0, length).some(Boolean));
   }
 });
 
@@ -150,6 +179,59 @@ test("generated bass sounds stay inside safe, useful synthesis ranges", () => {
   const densePatch = generateBassSound({ seed: "density-check", pattern: dense, length: 64 });
   assert.ok(sparsePatch.decay >= 0.92);
   assert.ok(densePatch.decay <= 0.9);
+});
+
+test("melodies stay ominous, tonal, sparse, monophonic, and clear of the rhythm section", () => {
+  for (let seedIndex = 0; seedIndex < 120; seedIndex += 1) {
+    const seed = `melody-${seedIndex}`;
+    const root = NOTE_NAMES[seedIndex % NOTE_NAMES.length];
+    const scale = Object.keys(SCALES)[seedIndex % Object.keys(SCALES).length];
+    const drums = generateDrumPattern({ seed, rateId: "16n", length: 64 });
+    const bass = generateBassPattern({ seed, drums, root, scale, rateId: "16n", length: 64 });
+    const melody = generateMelodyPattern({
+      seed,
+      drums,
+      bass,
+      root,
+      scale,
+      rateId: "16n",
+      length: 64,
+      energy: 0.68,
+      variation: 0.56,
+    });
+    const active = melody.map((event, step) => (event ? { event, step } : null)).filter(Boolean);
+    const rootMidi = getRootMidi(root);
+    const allowed = new Set(SCALES[scale].intervals.map((interval) => (rootMidi + interval) % 12));
+
+    assert.ok(active.length >= 8 && active.length <= 24, `unmusical density for ${seed}`);
+    assert.ok(active.every(({ event }) => event.midi >= 55 && event.midi <= 84));
+    assert.ok(active.every(({ event }) => noteToMidi(event.note) === event.midi));
+    assert.ok(active.every(({ event }) => allowed.has(event.midi % 12)), `out-of-scale note for ${seed}`);
+    assert.ok(active.every(({ event }) => (
+      Number.isInteger(event.length)
+      && event.length >= 1
+      && event.velocity >= 0.46
+      && event.velocity <= 0.88
+    )));
+    active.forEach(({ event, step }, index) => {
+      const nextStep = active[index + 1]?.step ?? 64;
+      assert.ok(event.length <= nextStep - step, `overlapping melody at ${step} for ${seed}`);
+    });
+    assert.equal(active.at(-1).event.midi % 12, rootMidi % 12, `unresolved phrase for ${seed}`);
+    assert.ok(
+      active.some(({ step }, index) => index > 0 && step - active[index - 1].step >= 3),
+      `no breathing room for ${seed}`,
+    );
+    const bassCollisions = active.filter(({ step }) => bass[step]).length / active.length;
+    const backbeatCollisions = active.filter(({ step }) => drums.snare[step] || drums.clap[step]).length / active.length;
+    assert.ok(bassCollisions <= 0.35, `melody crowds bass for ${seed}`);
+    assert.ok(backbeatCollisions <= 0.35, `melody crowds backbeat for ${seed}`);
+
+    const summary = melodySummary(melody, 64);
+    assert.equal(summary.events, active.length);
+    assert.equal(summary.held, active.filter(({ event }) => event.length >= 3).length);
+    assert.match(summary.range, /^[A-G]#?-?\d–[A-G]#?-?\d$/);
+  }
 });
 
 test("phrase labels explain straight and triplet loop lengths", () => {

@@ -147,6 +147,32 @@ test("drums use channel 10 and bass preserves triplet timing and slide overlap",
   assert.ok(DRUM_LANES.every(({ id }) => Number.isInteger(DRUM_MIDI_NOTES[id])));
 });
 
+test("enabled melody exports on its own channel and respects half-tempo spacing", () => {
+  const project = sampleProject("16t");
+  project.melodyEnabled = true;
+  project.melody = Array(64).fill(null);
+  project.melody[2] = { note: "F#4", midi: 66, velocity: 0.7, length: 3 };
+  project.melody[8] = { note: "A4", midi: 69, velocity: 0.82, length: 2 };
+
+  const normal = createMidiFile(project);
+  const halfTempo = createMidiFile(project, { halfTempo: true });
+  assert.equal((normal[10] << 8) + normal[11], 4);
+  const melody = channelEvents(trackChunks(normal)[3]);
+  const stretchedMelody = channelEvents(trackChunks(halfTempo)[3]);
+  const noteOns = (events) => events.filter((event) => event.status === 0x91);
+  const noteOffs = (events) => events.filter((event) => event.status === 0x81);
+
+  assert.deepEqual(noteOns(melody).map(({ tick, data }) => [tick, data[0]]), [[160, 66], [640, 69]]);
+  assert.deepEqual(
+    noteOns(stretchedMelody).map(({ tick }) => tick),
+    noteOns(melody).map(({ tick }) => tick * 2),
+  );
+  assert.deepEqual(
+    noteOffs(stretchedMelody).map(({ tick }) => tick),
+    noteOffs(melody).map(({ tick }) => tick * 2),
+  );
+});
+
 test("variable-length values and filenames are MIDI-safe", () => {
   assert.deepEqual(encodeVariableLength(0), [0]);
   assert.deepEqual(encodeVariableLength(127), [127]);

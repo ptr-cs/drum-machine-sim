@@ -63,6 +63,20 @@ export const DEFAULT_BASS_SOUND = {
   level: 0.78,
 };
 
+export const DEFAULT_MELODY_SOUND = {
+  wave: "triangle",
+  attack: 0.012,
+  decay: 0.22,
+  sustain: 0.16,
+  release: 0.55,
+  cutoff: 1450,
+  resonance: 3.4,
+  highpass: 170,
+  delay: 0.12,
+  space: 0.18,
+  level: 0.2,
+};
+
 export const DEFAULT_DRUM_SETTINGS = Object.fromEntries(
   DRUM_LANES.map(({ id }) => [
     id,
@@ -85,6 +99,10 @@ export function emptyDrums() {
 }
 
 export function emptyBass() {
+  return Array(TOTAL_STEPS).fill(null);
+}
+
+export function emptyMelody() {
   return Array(TOTAL_STEPS).fill(null);
 }
 

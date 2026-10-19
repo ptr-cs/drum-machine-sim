@@ -150,6 +150,32 @@ function bassTrack(project, stepTicks, endTick) {
   return namedTrack("808 Bass", events, endTick);
 }
 
+function melodyTrack(project, stepTicks, endTick) {
+  const events = [
+    { tick: 0, priority: -1, bytes: metaEvent(0x20, [1]) },
+    { tick: 0, priority: 0, bytes: [0xc1, 10] },
+  ];
+
+  (project.melody ?? [])
+    .slice(0, project.length)
+    .forEach((event, step) => {
+      if (!event) return;
+      const tick = step * stepTicks;
+      const midi = clamp(Number.isFinite(event.midi) ? Math.round(event.midi) : noteToMidi(event.note), 0, 127);
+      const velocity = clamp(Math.round((Number(event.velocity) || 0.72) * 127), 1, 127);
+      const offTick = Math.min(
+        endTick,
+        tick + Math.max(1, Math.round((Number(event.length) || 1) * stepTicks)),
+      );
+      events.push(
+        { tick, priority: 1, bytes: [0x91, midi, velocity] },
+        { tick: offTick, priority: 0, bytes: [0x81, midi, 0] },
+      );
+    });
+
+  return namedTrack("Ominous Melody", events, endTick);
+}
+
 export function createMidiFile(project, { halfTempo = false } = {}) {
   const length = clamp(Math.round(Number(project.length) || 64), 1, 64);
   const normalizedProject = { ...project, length };
@@ -160,6 +186,9 @@ export function createMidiFile(project, { halfTempo = false } = {}) {
     drumTrack(normalizedProject, stepTicks, endTick),
     bassTrack(normalizedProject, stepTicks, endTick),
   ];
+  if (normalizedProject.melodyEnabled) {
+    tracks.push(melodyTrack(normalizedProject, stepTicks, endTick));
+  }
   const header = [
     ...asciiBytes("MThd"),
     ...uint32(6),

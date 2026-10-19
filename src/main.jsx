@@ -7,17 +7,21 @@ import {
   generateBassSound,
   generateDrumPattern,
   generateGrooveSettings,
+  generateMelodyPattern,
+  melodySummary,
   nextSeed,
 } from "./generator.js";
 import {
   DEFAULT_BASS_SOUND,
   DEFAULT_DRUM_SETTINGS,
+  DEFAULT_MELODY_SOUND,
   DRUM_LANES,
   NOTE_NAMES,
   PATTERN_LENGTHS,
   SCALES,
   STEP_RATES,
   TOTAL_STEPS,
+  emptyMelody,
   getRootMidi,
   midiToNote,
   noteToMidi,
@@ -69,7 +73,10 @@ function createStarterProject() {
     slides: 0.56,
     drums,
     bass,
+    melody: emptyMelody(),
+    melodyEnabled: false,
     bassSound: generateBassSound({ seed, energy: 0.7, pattern: bass, length: 64 }),
+    melodySound: { ...DEFAULT_MELODY_SOUND },
     drumSettings: cloneDrumSettings(),
     muted: Object.fromEntries(DRUM_LANES.map(({ id }) => [id, false])),
     bassMuted: false,
@@ -85,7 +92,9 @@ function loadProject() {
       ...fallback,
       ...stored,
       drums: { ...fallback.drums, ...stored.drums },
+      melody: Array.isArray(stored.melody) ? stored.melody : fallback.melody,
       bassSound: { ...fallback.bassSound, ...stored.bassSound },
+      melodySound: { ...fallback.melodySound, ...stored.melodySound },
       drumSettings: Object.fromEntries(
         DRUM_LANES.map(({ id }) => [
           id,
@@ -192,6 +201,7 @@ function MiniOverview({ project, playhead, bank, setBank }) {
         {Array.from({ length: TOTAL_STEPS }, (_, step) => {
           const hasDrums = drumActivity[step];
           const hasBass = Boolean(project.bass[step]);
+          const hasMelody = Boolean(project.melody?.[step]);
           return (
             <button
               key={step}
@@ -203,6 +213,8 @@ function MiniOverview({ project, playhead, bank, setBank }) {
                 "overview-step",
                 hasDrums ? "has-drums" : "",
                 hasBass ? "has-bass" : "",
+                hasMelody ? "has-melody" : "",
+                hasMelody && !project.melodyEnabled ? "melody-off" : "",
                 playhead === step ? "is-playing" : "",
                 Math.floor(step / 16) === bank ? "in-bank" : "",
               ].filter(Boolean).join(" ")}
@@ -366,6 +378,58 @@ function BassGrid({ project, bank, playhead, selectedStep, onSelectStep, onDelet
   );
 }
 
+function MelodyGrid({ project, bank, playhead, selectedStep, onSelectStep, onDeleteStep }) {
+  const group = stepGroupSize(project.rateId);
+  return (
+    <div className="bass-grid melody-grid" role="grid" aria-label="Melody sequencer">
+      <StepHeader bank={bank} rateId={project.rateId} length={project.length} />
+      <div className="bass-row" role="row">
+        <div className="bass-row-label melody-row-label" role="rowheader">
+          <span className="melody-glyph">◆</span>
+          <div><b>MOTIF</b><small>mono / dark pluck</small></div>
+        </div>
+        {Array.from({ length: 16 }, (_, local) => {
+          const step = bank * 16 + local;
+          const event = project.melody?.[step];
+          return (
+            <button
+              key={step}
+              type="button"
+              role="gridcell"
+              disabled={step >= project.length}
+              aria-pressed={Boolean(event)}
+              aria-label={event
+                ? `Melody step ${step + 1}, ${event.note}, velocity ${Math.round(event.velocity * 100)}`
+                : `Melody step ${step + 1}, empty`}
+              title={event ? "Click to edit · Double-click to clear" : "Click to add the root note"}
+              onClick={() => onSelectStep(step)}
+              onDoubleClick={() => onDeleteStep(step)}
+              className={[
+                "bass-step",
+                "melody-step",
+                event ? "active" : "",
+                selectedStep === step ? "selected" : "",
+                step % group === 0 ? "group-start" : "",
+                playhead === step ? "is-playing" : "",
+              ].filter(Boolean).join(" ")}
+            >
+              <span className="bass-step-number">{String(step + 1).padStart(2, "0")}</span>
+              {event ? (
+                <>
+                  <strong>{event.note}</strong>
+                  <span className="velocity-bar" style={{ "--velocity": event.velocity }} />
+                  <small>{event.length}×</small>
+                </>
+              ) : <span className="empty-note">—</span>}
+            </button>
+          );
+        })}
+      </div>
+      <p className="grid-hint">Click an empty step to add the key center · Double-click a note to clear it</p>
+    </div>
+  );
+}
+
 function VoiceBay({ project, selectedLane, onParam, onAudition }) {
   const lane = DRUM_LANES.find((item) => item.id === selectedLane) ?? DRUM_LANES[0];
   const settings = project.drumSettings[lane.id];
@@ -467,6 +531,64 @@ function BassGeneratorBay({ project, summary, onGeneratePattern, onGenerateSound
   );
 }
 
+function MelodySoundBay({ project, onParam, onWave, onToggle, onAudition }) {
+  const sound = project.melodySound;
+  return (
+    <aside className="bay bass-sound-bay melody-sound-bay">
+      <div className="bay-kicker">melody circuit</div>
+      <div className="sound-title-line"><h3>Shadow voice</h3><span>{sound.archetype ?? "dark pluck"}</span></div>
+      <button
+        className={`melody-enable ${project.melodyEnabled ? "active" : ""}`}
+        type="button"
+        aria-pressed={project.melodyEnabled}
+        onClick={onToggle}
+      >
+        <span className="status-dot" />
+        <b>Melody {project.melodyEnabled ? "on" : "off"}</b>
+        <small>{project.melodyEnabled ? "included in playback + MIDI" : "silent by default"}</small>
+      </button>
+      <div className="wave-switch" role="group" aria-label="Melody oscillator wave">
+        {["triangle", "sine"].map((wave) => (
+          <button type="button" key={wave} className={sound.wave === wave ? "active" : ""} onClick={() => onWave(wave)}>{wave}</button>
+        ))}
+      </div>
+      <div className="knob-rack melody-knobs">
+        <Knob accent="violet" label="Tone" value={sound.cutoff} min={700} max={5200} step={10} onChange={(value) => onParam("cutoff", value)} format={(value) => `${Math.round(value)}Hz`} />
+        <Knob accent="violet" label="Decay" value={sound.decay} min={0.15} max={2} step={0.01} onChange={(value) => onParam("decay", value)} format={(value) => `${value.toFixed(2)}s`} />
+        <Knob accent="violet" label="Release" value={sound.release} min={0.1} max={2.5} step={0.01} onChange={(value) => onParam("release", value)} format={(value) => `${value.toFixed(2)}s`} />
+        <Knob accent="violet" label="Delay" value={sound.delay} min={0} max={0.45} step={0.01} onChange={(value) => onParam("delay", value)} format={(value) => `${Math.round(value * 100)}%`} />
+        <Knob accent="violet" label="Space" value={sound.space} min={0} max={0.6} step={0.01} onChange={(value) => onParam("space", value)} format={(value) => `${Math.round(value * 100)}%`} />
+        <Knob accent="violet" label="Level" value={sound.level} min={0.12} max={0.72} step={0.01} onChange={(value) => onParam("level", value)} format={(value) => `${Math.round(value * 100)}`} />
+      </div>
+      <button className="audition-wide melody-audition" type="button" onClick={onAudition}>Preview voice <b>{midiToNote(getRootMidi(project.root) + 36)}</b></button>
+    </aside>
+  );
+}
+
+function MelodyGeneratorBay({ project, summary, onGenerate, onUpdate, canUndo, onUndo }) {
+  return (
+    <aside className="bay generator-bay melody-generator">
+      <div className="bay-kicker">motif architect</div>
+      <h3>Ominous melody</h3>
+      <p>Short minor-key cells repeat, descend, and mutate at phrase endings while leaving space for the vocal and 808.</p>
+      <div className="generator-stats">
+        <span><b>{summary.events}</b> notes</span>
+        <span><b>{summary.held}</b> held</span>
+        <span><b>{summary.range}</b> range</span>
+      </div>
+      <Knob accent="violet" label="Density" value={project.energy} onChange={(value) => onUpdate("energy", value)} format={(value) => `${Math.round(value * 100)}%`} />
+      <Knob accent="violet" label="Mutation" value={project.variation} onChange={(value) => onUpdate("variation", value)} format={(value) => `${Math.round(value * 100)}%`} />
+      <button className="generate-button primary" type="button" onClick={onGenerate}>
+        <Icon name="dice" />
+        <span><b>Generate melody</b><small>{project.melodyEnabled ? "replace the current motif" : "write notes · output stays off"}</small></span>
+      </button>
+      <button className="undo-button" type="button" disabled={!canUndo} onClick={onUndo}>
+        <Icon name="undo" size={16} /> Undo last generation
+      </button>
+    </aside>
+  );
+}
+
 function BassStepInspector({ event, step, maxGate, onChange, onDelete, onAudition }) {
   if (step === null || !event) {
     return (
@@ -494,10 +616,39 @@ function BassStepInspector({ event, step, maxGate, onChange, onDelete, onAuditio
   );
 }
 
+function MelodyStepInspector({ event, step, maxGate, onChange, onDelete, onAudition }) {
+  if (step === null || !event) {
+    return (
+      <div className="step-inspector melody-inspector empty">
+        <span className="inspector-index">STEP —</span>
+        <p>Select a melody note to edit pitch, gate, and velocity.</p>
+      </div>
+    );
+  }
+  const noteOptions = Array.from({ length: 30 }, (_, index) => midiToNote(55 + index));
+  return (
+    <div className="step-inspector melody-inspector">
+      <div className="inspector-heading">
+        <span className="inspector-index">STEP {String(step + 1).padStart(2, "0")}</span>
+        <button type="button" onClick={() => onAudition(event.note)} className="note-audition">▶ {event.note}</button>
+      </div>
+      <div className="inspector-fields melody-inspector-fields">
+        <label>Pitch<select value={event.note} onChange={(e) => onChange("note", e.target.value)}>{noteOptions.map((note) => <option key={note}>{note}</option>)}</select></label>
+        <label>Gate<output>{event.length} steps</output><input type="range" min="1" max={maxGate} value={Math.min(event.length, maxGate)} onChange={(e) => onChange("length", Number(e.target.value))} /></label>
+        <label>Velocity<output>{Math.round(event.velocity * 100)}%</output><input type="range" min="0.35" max="1" step="0.01" value={event.velocity} onChange={(e) => onChange("velocity", Number(e.target.value))} /></label>
+      </div>
+      <button className="delete-step" type="button" onClick={onDelete}>Clear note</button>
+    </div>
+  );
+}
+
 function App() {
   const [project, setProject] = useState(loadProject);
   const [workspace, setWorkspace] = useState(
-    () => new URLSearchParams(window.location.search).get("view") === "bass" ? "bass" : "drums",
+    () => {
+      const requested = new URLSearchParams(window.location.search).get("view");
+      return ["drums", "bass", "melody"].includes(requested) ? requested : "drums";
+    },
   );
   const [bank, setBank] = useState(0);
   const [follow, setFollow] = useState(true);
@@ -505,6 +656,7 @@ function App() {
   const [transportState, setTransportState] = useState("stopped");
   const [selectedLane, setSelectedLane] = useState("kick");
   const [selectedBassStep, setSelectedBassStep] = useState(null);
+  const [selectedMelodyStep, setSelectedMelodyStep] = useState(null);
   const [undoSnapshot, setUndoSnapshot] = useState(null);
   const [meterLevel, setMeterLevel] = useState(-60);
   const [audioError, setAudioError] = useState("");
@@ -542,6 +694,16 @@ function App() {
     if (!engineRef.current.initialized) return;
     engineRef.current.setBassSound(project.bassSound);
   }, [project.bassSound]);
+
+  useEffect(() => {
+    if (!engineRef.current.initialized) return;
+    engineRef.current.setMelodySound(project.melodySound);
+  }, [project.melodySound]);
+
+  useEffect(() => {
+    if (!engineRef.current.initialized) return;
+    engineRef.current.setMelodyEnabled(project.melodyEnabled);
+  }, [project.melodyEnabled]);
 
   const previousRate = useRef(project.rateId);
   useEffect(() => {
@@ -619,6 +781,7 @@ function App() {
       }
       if (event.key === "1") setWorkspace("drums");
       if (event.key === "2") setWorkspace("bass");
+      if (event.key === "3") setWorkspace("melody");
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -630,7 +793,9 @@ function App() {
     setUndoSnapshot({
       drums: project.drums,
       bass: project.bass,
+      melody: project.melody,
       bassSound: project.bassSound,
+      melodySound: project.melodySound,
       seed: project.seed,
       bpm: project.bpm,
       root: project.root,
@@ -703,6 +868,23 @@ function App() {
     setProject((current) => ({ ...current, seed, bass, bassSound }));
   };
 
+  const generateMelody = () => {
+    captureUndo();
+    const seed = makeSeed("melody");
+    const melody = generateMelodyPattern({
+      seed,
+      drums: project.drums,
+      bass: project.bass,
+      root: project.root,
+      scale: project.scale,
+      rateId: project.rateId,
+      length: project.length,
+      energy: project.energy,
+      variation: project.variation,
+    });
+    setProject((current) => ({ ...current, seed, melody }));
+  };
+
   const generateGroove = () => {
     captureUndo();
     const seed = makeSeed("full-groove");
@@ -735,7 +917,18 @@ function App() {
       pattern: bass,
       length: project.length,
     });
-    setProject((current) => ({ ...current, ...groove, seed, drums, bass, bassSound }));
+    const melody = generateMelodyPattern({
+      seed,
+      drums,
+      bass,
+      root: groove.root,
+      scale: groove.scale,
+      rateId: project.rateId,
+      length: project.length,
+      energy: project.energy,
+      variation: project.variation,
+    });
+    setProject((current) => ({ ...current, ...groove, seed, drums, bass, melody, bassSound }));
   };
 
   const undoGeneration = () => {
@@ -743,7 +936,9 @@ function App() {
     const redo = {
       drums: project.drums,
       bass: project.bass,
+      melody: project.melody,
       bassSound: project.bassSound,
+      melodySound: project.melodySound,
       seed: project.seed,
       bpm: project.bpm,
       root: project.root,
@@ -842,6 +1037,56 @@ function App() {
     }
   };
 
+  const selectMelodyStep = (step) => {
+    setSelectedMelodyStep(step);
+    if (project.melody?.[step]) return;
+    const midi = getRootMidi(project.root) + 36;
+    setProject((current) => {
+      const melody = [...current.melody];
+      melody[step] = { note: midiToNote(midi), midi, velocity: 0.72, length: 2 };
+      return { ...current, melody };
+    });
+  };
+
+  const deleteMelodyStep = (step = selectedMelodyStep) => {
+    if (step === null) return;
+    setProject((current) => {
+      const melody = [...current.melody];
+      melody[step] = null;
+      return { ...current, melody };
+    });
+  };
+
+  const changeMelodyEvent = (key, value) => {
+    if (selectedMelodyStep === null) return;
+    setProject((current) => {
+      const event = current.melody[selectedMelodyStep];
+      if (!event) return current;
+      const melody = [...current.melody];
+      melody[selectedMelodyStep] = {
+        ...event,
+        [key]: value,
+        ...(key === "note" ? { midi: noteToMidi(value) } : {}),
+      };
+      return { ...current, melody };
+    });
+  };
+
+  const setMelodyParam = (key, value) => {
+    setProject((current) => ({
+      ...current,
+      melodySound: { ...current.melodySound, [key]: value },
+    }));
+  };
+
+  const auditionMelody = async (note = midiToNote(getRootMidi(project.root) + 36)) => {
+    try {
+      await engineRef.current.auditionMelody(note, project.melodySound);
+    } catch {
+      setAudioError("Click Play once to unlock audio, then audition the melody.");
+    }
+  };
+
   const tapTempo = () => {
     const now = performance.now();
     const recent = [...tapTimes.filter((time) => now - time < 2400), now].slice(-5);
@@ -886,14 +1131,16 @@ function App() {
   };
 
   const summary = bassSummary(project.bass, project.length);
+  const melodyStats = melodySummary(project.melody, project.length);
   const selectedEvent = selectedBassStep === null ? null : project.bass[selectedBassStep];
+  const selectedMelodyEvent = selectedMelodyStep === null ? null : project.melody[selectedMelodyStep];
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark"><span>8</span><span>0</span><span>8</span></div>
-          <div><h1>Drum Machine Sim</h1><p>bass + rhythm synthesizer</p></div>
+          <div><h1>Drum Machine Sim</h1><p>rhythm + bass + melody synthesizer</p></div>
           <span className="local-badge">LOCAL</span>
         </div>
 
@@ -913,6 +1160,7 @@ function App() {
         <div className="workspace-tabs" role="tablist" aria-label="Instrument workspace">
           <button role="tab" aria-selected={workspace === "drums"} className={workspace === "drums" ? "active" : ""} onClick={() => setWorkspace("drums")}><span>01</span> Percussion</button>
           <button role="tab" aria-selected={workspace === "bass"} className={workspace === "bass" ? "active" : ""} onClick={() => setWorkspace("bass")}><span>02</span> 808 Bass</button>
+          <button role="tab" aria-selected={workspace === "melody"} className={workspace === "melody" ? "active" : ""} onClick={() => setWorkspace("melody")}><span>03</span> Melody</button>
         </div>
 
         <div className="file-actions">
@@ -924,12 +1172,12 @@ function App() {
 
       <section className="control-rail" aria-label="Pattern settings">
         <div className="global-actions">
-          <button className="global-generate" type="button" onClick={generateGroove} title="Generate drums, bass pattern, and bass sound">
+          <button className="global-generate" type="button" onClick={generateGroove} title="Generate tempo, key, drums, bass, and melody">
             <Icon name="dice" size={20} />
-            <span><b>Generate groove</b><small>tempo · key · drums · bass</small></span>
+            <span><b>Generate groove</b><small>tempo · key · all parts</small></span>
           </button>
           <div className="midi-export-group">
-            <button className="midi-export" type="button" onClick={() => downloadMidiFile(project, { halfTempo: midiHalfTempo })} title={`Export separate drum and bass MIDI tracks${midiHalfTempo ? " at half tempo and twice the pattern length" : ""}`}>
+            <button className="midi-export" type="button" onClick={() => downloadMidiFile(project, { halfTempo: midiHalfTempo })} title={`Export separate drum, bass${project.melodyEnabled ? ", and melody" : ""} MIDI tracks${midiHalfTempo ? " at half tempo and twice the pattern length" : ""}`}>
               <Icon name="download" size={16} />
               <span><b>MIDI</b></span>
             </button>
@@ -956,7 +1204,7 @@ function App() {
             <MiniOverview project={{ ...project, follow }} playhead={playhead} bank={bank} setBank={setBank} />
             <div className="follow-control">
               <button className={follow ? "active" : ""} type="button" aria-pressed={follow} onClick={() => setFollow((value) => !value)}><span className="status-dot" /> Follow</button>
-              <span>Space: play · 1/2: switch</span>
+              <span>Space: play · 1/2/3: switch</span>
             </div>
           </div>
           <BankSelector bank={bank} setBank={setBank} length={project.length} />
@@ -965,8 +1213,8 @@ function App() {
         <section className={`instrument-chassis ${workspace}`}>
           <div className="instrument-header">
             <div>
-              <span className="eyebrow">{workspace === "drums" ? "TR-style percussion synthesizer" : "monophonic sub synthesizer"}</span>
-              <h2>{workspace === "drums" ? "Rhythm machine" : "808 bass machine"}</h2>
+              <span className="eyebrow">{workspace === "drums" ? "TR-style percussion synthesizer" : workspace === "bass" ? "monophonic sub synthesizer" : "ominous motif synthesizer"}</span>
+              <h2>{workspace === "drums" ? "Rhythm machine" : workspace === "bass" ? "808 bass machine" : "Melody machine"}</h2>
             </div>
             <div className="now-status">
               <span className={transportState === "playing" ? "live" : ""} />
@@ -983,7 +1231,7 @@ function App() {
               </section>
               <DrumGeneratorBay project={project} onGenerate={generateDrums} onUpdate={updateProject} canUndo={Boolean(undoSnapshot)} onUndo={undoGeneration} />
             </div>
-          ) : (
+          ) : workspace === "bass" ? (
             <div className="workspace-layout bass-layout">
               <BassSoundBay project={project} onParam={setBassParam} onWave={(wave) => setBassParam("wave", wave)} onAudition={() => auditionBass()} />
               <section className="bass-center-stack">
@@ -994,6 +1242,27 @@ function App() {
                 <BassStepInspector event={selectedEvent} step={selectedBassStep} maxGate={Math.max(1, project.length - (selectedBassStep ?? 0))} onChange={changeBassEvent} onDelete={() => deleteBassStep()} onAudition={auditionBass} />
               </section>
               <BassGeneratorBay project={project} summary={summary} onGeneratePattern={generatePattern} onGenerateSound={generateSound} onGenerateBoth={generateBoth} onUpdate={updateProject} canUndo={Boolean(undoSnapshot)} onUndo={undoGeneration} />
+            </div>
+          ) : (
+            <div className="workspace-layout bass-layout melody-layout">
+              <MelodySoundBay
+                project={project}
+                onParam={setMelodyParam}
+                onWave={(wave) => setMelodyParam("wave", wave)}
+                onToggle={() => updateProject("melodyEnabled", !project.melodyEnabled)}
+                onAudition={() => auditionMelody()}
+              />
+              <section className="bass-center-stack melody-center-stack">
+                <section className="bay sequencer-bay bass-sequencer-bay melody-sequencer-bay">
+                  <div className="bay-topline">
+                    <div><span className="bay-kicker">sequence</span><h3>Motif lane</h3></div>
+                    <button className={`bass-mute melody-output-toggle ${project.melodyEnabled ? "active" : ""}`} type="button" aria-pressed={project.melodyEnabled} onClick={() => updateProject("melodyEnabled", !project.melodyEnabled)}>{project.melodyEnabled ? "MELODY ON" : "MELODY OFF"}</button>
+                  </div>
+                  <MelodyGrid project={project} bank={bank} playhead={playhead} selectedStep={selectedMelodyStep} onSelectStep={selectMelodyStep} onDeleteStep={deleteMelodyStep} />
+                </section>
+                <MelodyStepInspector event={selectedMelodyEvent} step={selectedMelodyStep} maxGate={Math.max(1, project.length - (selectedMelodyStep ?? 0))} onChange={changeMelodyEvent} onDelete={() => deleteMelodyStep()} onAudition={auditionMelody} />
+              </section>
+              <MelodyGeneratorBay project={project} summary={melodyStats} onGenerate={generateMelody} onUpdate={updateProject} canUndo={Boolean(undoSnapshot)} onUndo={undoGeneration} />
             </div>
           )}
         </section>
@@ -1007,7 +1276,7 @@ function App() {
 
       <footer>
         <p>Pattern logic studies shared Bronx drill vocabulary—half-time anchors, syncopated low end, negative space, and restrained slides—without recreating any specific recording.</p>
-        <span>Tone.js engine · no samples · 64 steps</span>
+        <span>Tone.js engine · no samples · 3 layers · 64 steps</span>
       </footer>
     </div>
   );

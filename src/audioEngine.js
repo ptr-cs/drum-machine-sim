@@ -1,7 +1,8 @@
 import * as Tone from "tone";
-import { DRUM_LANES, getRate } from "./music.js";
+import { DEFAULT_MELODY_SOUND, DRUM_LANES, getRate } from "./music.js";
 
 const dbForVelocity = (velocity) => Math.max(0.05, Math.min(1, velocity));
+const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
 class BassVoice {
   constructor(destination) {
@@ -106,6 +107,124 @@ class BassVoice {
       this.highpass,
       this.output,
     ].forEach((node) => node.dispose());
+  }
+}
+
+class MelodyVoice {
+  constructor(destination) {
+    this.synth = new Tone.PolySynth({
+      voice: Tone.Synth,
+      maxPolyphony: 4,
+      options: {
+        oscillator: { type: DEFAULT_MELODY_SOUND.wave },
+        envelope: {
+          attack: DEFAULT_MELODY_SOUND.attack,
+          decay: DEFAULT_MELODY_SOUND.decay,
+          sustain: DEFAULT_MELODY_SOUND.sustain,
+          release: DEFAULT_MELODY_SOUND.release,
+        },
+      },
+    });
+    this.lowpass = new Tone.Filter({
+      frequency: DEFAULT_MELODY_SOUND.cutoff,
+      type: "lowpass",
+      rolloff: -24,
+      Q: DEFAULT_MELODY_SOUND.resonance,
+    });
+    this.highpass = new Tone.Filter({
+      frequency: DEFAULT_MELODY_SOUND.highpass,
+      type: "highpass",
+      rolloff: -12,
+      Q: 0.7,
+    });
+    this.delay = new Tone.FeedbackDelay({
+      delayTime: "8n.",
+      feedback: 0.16,
+      wet: DEFAULT_MELODY_SOUND.delay,
+    });
+    this.reverb = new Tone.Reverb({
+      decay: 2.7,
+      preDelay: 0.025,
+      wet: DEFAULT_MELODY_SOUND.space,
+    });
+    this.output = new Tone.Gain(DEFAULT_MELODY_SOUND.level * 0.42);
+    this.synth.chain(
+      this.lowpass,
+      this.highpass,
+      this.delay,
+      this.reverb,
+      this.output,
+      destination,
+    );
+    this.currentSound = null;
+    this.setSound(DEFAULT_MELODY_SOUND, 0);
+  }
+
+  normalizeSound(sound = {}) {
+    const merged = { ...DEFAULT_MELODY_SOUND, ...sound };
+    return {
+      wave: ["sine", "triangle", "sawtooth"].includes(merged.wave)
+        ? merged.wave
+        : DEFAULT_MELODY_SOUND.wave,
+      attack: clamp(Number(merged.attack) || DEFAULT_MELODY_SOUND.attack, 0.002, 0.12),
+      decay: clamp(Number(merged.decay) || DEFAULT_MELODY_SOUND.decay, 0.03, 2),
+      sustain: clamp(Number.isFinite(merged.sustain) ? merged.sustain : DEFAULT_MELODY_SOUND.sustain, 0, 0.65),
+      release: clamp(Number(merged.release) || DEFAULT_MELODY_SOUND.release, 0.05, 3),
+      cutoff: clamp(Number(merged.cutoff) || DEFAULT_MELODY_SOUND.cutoff, 500, 5200),
+      resonance: clamp(Number(merged.resonance) || DEFAULT_MELODY_SOUND.resonance, 0.2, 8),
+      highpass: clamp(Number(merged.highpass) || DEFAULT_MELODY_SOUND.highpass, 90, 320),
+      delay: clamp(Number.isFinite(merged.delay) ? merged.delay : DEFAULT_MELODY_SOUND.delay, 0, 0.45),
+      space: clamp(Number.isFinite(merged.space) ? merged.space : DEFAULT_MELODY_SOUND.space, 0, 0.6),
+      level: clamp(Number.isFinite(merged.level) ? merged.level : DEFAULT_MELODY_SOUND.level, 0, 0.72),
+    };
+  }
+
+  setSound(sound, ramp = 0.035, startTime = Tone.now()) {
+    const normalized = this.normalizeSound(sound);
+    const unchanged = this.currentSound
+      && Object.keys(normalized).every((key) => this.currentSound[key] === normalized[key]);
+    if (unchanged) return;
+
+    this.synth.set({
+      oscillator: { type: normalized.wave },
+      envelope: {
+        attack: normalized.attack,
+        decay: normalized.decay,
+        sustain: normalized.sustain,
+        release: normalized.release,
+      },
+    });
+    this.lowpass.frequency.rampTo(normalized.cutoff, ramp, startTime);
+    this.lowpass.Q.rampTo(normalized.resonance, ramp, startTime);
+    this.highpass.frequency.rampTo(normalized.highpass, ramp, startTime);
+    this.delay.wet.rampTo(normalized.delay, ramp, startTime);
+    this.reverb.wet.rampTo(normalized.space, ramp, startTime);
+    this.output.gain.rampTo(normalized.level * 0.42, ramp, startTime);
+    this.currentSound = normalized;
+  }
+
+  trigger(event, time, stepSeconds, sound) {
+    if (!event?.note) return;
+    this.setSound(sound, 0.02, time);
+    const duration = clamp(stepSeconds * Math.max(1, Number(event.length) || 1) * 0.94, 0.04, 8);
+    const velocity = clamp(Number(event.velocity) || 0.68, 0.05, 0.88);
+    this.synth.triggerAttackRelease(event.note, duration, time, velocity);
+  }
+
+  silence(time = Tone.now()) {
+    this.synth.releaseAll(time);
+    this.output.gain.cancelAndHoldAtTime(time);
+    this.output.gain.rampTo(0, 0.04, time);
+    this.currentSound = null;
+  }
+
+  dispose() {
+    this.synth.dispose();
+    this.lowpass.dispose();
+    this.highpass.dispose();
+    this.delay.dispose();
+    this.reverb.dispose();
+    this.output.dispose();
   }
 }
 
@@ -329,6 +448,7 @@ export class AudioEngine {
     this.input.chain(this.compressor, this.limiter, this.meter, Tone.getDestination());
     this.drums = new DrumRack(this.input);
     this.bass = new BassVoice(this.input);
+    this.melody = new MelodyVoice(this.input);
     this.initialized = true;
   }
 
@@ -369,10 +489,16 @@ export class AudioEngine {
         }
       });
 
-      const bassEvent = state.bass[currentStep];
+      const bassEvent = state.bass?.[currentStep];
+      const melodyEvent = state.melody?.[currentStep];
+      const hasPitchedEvent = (bassEvent && !state.bassMuted)
+        || (melodyEvent && state.melodyEnabled && !state.melodyMuted);
+      const stepSeconds = hasPitchedEvent ? Tone.Time(subdivision).toSeconds() : 0;
       if (bassEvent && !state.bassMuted) {
-        const stepSeconds = Tone.Time(subdivision).toSeconds();
         this.bass.trigger(bassEvent, time, stepSeconds, state.bassSound);
+      }
+      if (melodyEvent && state.melodyEnabled && !state.melodyMuted) {
+        this.melody.trigger(melodyEvent, time, stepSeconds, state.melodySound);
       }
 
       Tone.getDraw().schedule(() => this.onStep?.(currentStep), time);
@@ -387,6 +513,7 @@ export class AudioEngine {
     this.onStep = onStep;
     this.onLoop = onLoop;
     this.bass.setSound(getState()?.bassSound, 0.01);
+    this.melody.setSound(getState()?.melodySound, 0.01);
     this.step = 0;
     this.schedule(rateId);
     this.configure({ bpm, swing, master });
@@ -404,6 +531,7 @@ export class AudioEngine {
   pause() {
     Tone.getTransport().pause();
     this.bass?.silence();
+    this.melody?.silence();
   }
 
   stop() {
@@ -413,6 +541,7 @@ export class AudioEngine {
     transport.position = 0;
     this.step = 0;
     this.bass?.silence();
+    this.melody?.silence();
     this.onStep?.(-1);
   }
 
@@ -434,6 +563,16 @@ export class AudioEngine {
     this.bass?.setSound(sound);
   }
 
+  setMelodySound(sound) {
+    this.melody?.setSound(sound);
+    if (this.getState?.()?.melodyEnabled === false) this.melody?.silence();
+  }
+
+  setMelodyEnabled(enabled) {
+    if (!enabled) this.melody?.silence();
+    else this.melody?.setSound(this.getState?.()?.melodySound ?? DEFAULT_MELODY_SOUND);
+  }
+
   setMaster(level) {
     this.input?.gain.rampTo(level, 0.03);
   }
@@ -453,6 +592,16 @@ export class AudioEngine {
     );
   }
 
+  async auditionMelody(note, sound = DEFAULT_MELODY_SOUND) {
+    await this.initialize();
+    this.melody.trigger(
+      { note, velocity: 0.72, length: 1 },
+      Tone.now(),
+      0.48,
+      sound,
+    );
+  }
+
   getLevel() {
     if (!this.meter) return -60;
     const value = this.meter.getValue();
@@ -465,6 +614,7 @@ export class AudioEngine {
     this.stop();
     this.drums?.dispose();
     this.bass?.dispose();
+    this.melody?.dispose();
     [this.input, this.compressor, this.limiter, this.meter]
       .filter(Boolean)
       .forEach((node) => node.dispose());

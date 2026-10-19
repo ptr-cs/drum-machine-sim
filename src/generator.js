@@ -118,6 +118,26 @@ const BASS_DEGREE_MOTIFS = [
   [0, 2, 0, 4, 1, 0],
 ];
 
+// Original motif grammar distilled from shared production traits around
+// Kay Flock's “Is Ya Ready” / “Being Honest” and Edot Babyy's “Friday Night” /
+// “Ready 4 War”: sparse repeated cells, dark scalar tension, and descending
+// answers. These are abstract constraints, not transcribed pitches or rhythms.
+const MELODY_RHYTHM_MOTIFS = [
+  [0, 0.75, 1.75, 3.25],
+  [0.5, 1.25, 2.5, 3.5],
+  [0, 1.5, 2.25, 3.75],
+  [0.25, 1.25, 2.75, 3.5],
+  [0.5, 1.75, 3],
+];
+
+const MELODY_DEGREE_MOTIFS = [
+  [0, 1, 0, -1],
+  [4, 3, 1, 0],
+  [0, 4, 3, 1],
+  [0, 6, 5, 4],
+  [2, 1, 0, 4],
+];
+
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
 function usableLength(length) {
@@ -732,6 +752,269 @@ export function generateBassPattern({
   return bestResult ?? Array(TOTAL_STEPS).fill(null);
 }
 
+export function generateMelodyPattern({
+  seed,
+  drums,
+  bass,
+  root = "F#",
+  scale = "minor",
+  rateId = "16n",
+  length = TOTAL_STEPS,
+  energy = 0.68,
+  variation = 0.56,
+} = {}) {
+  const stepBeats = getRate(rateId).beats;
+  const patternLength = usableLength(length);
+  const safeEnergy = clamp(energy, 0, 1);
+  const safeVariation = clamp(variation, 0, 1);
+  const rootMidi = getRootMidi(root);
+  const scaleIntervals = (SCALES[scale] ?? SCALES.minor).intervals;
+  const stepsPerBar = Math.max(1, Math.round(4 / stepBeats));
+  const barCount = Math.max(1, Math.ceil(patternLength / stepsPerBar));
+  const bassPattern = Array.isArray(bass) ? bass : [];
+  const snare = drums?.snare ?? [];
+  const clap = drums?.clap ?? [];
+  const kick = drums?.kick ?? [];
+  const tensionDegrees = scale === "phrygian"
+    ? [1, 5, 6]
+    : scale === "harmonicMinor"
+      ? [6, 5, 1]
+      : [5, 6, 1];
+
+  const collisionCost = (step) => (
+    (bassPattern[step] ? 7 : 0)
+    + (snare[step] ? 4 : 0)
+    + (clap[step] ? 2 : 0)
+    + (kick[step] ? 1 : 0)
+  );
+
+  const voiceLedMidi = (degree, previousMidi, raised = false) => {
+    const options = [-1, 0, 1, 2, 3, 4, 5]
+      .map((octave) => midiForDegree(rootMidi, scaleIntervals, degree, octave))
+      .filter((midi) => midi >= 55 && midi <= 84);
+    if (!options.length) {
+      return clamp(midiForDegree(rootMidi, scaleIntervals, degree, 3), 55, 84);
+    }
+    const center = raised ? 74 : 67;
+    return options.reduce((best, midi) => {
+      const bestCost = previousMidi == null
+        ? Math.abs(best - center)
+        : Math.abs(best - previousMidi) + Math.abs(best - center) * 0.12;
+      const nextCost = previousMidi == null
+        ? Math.abs(midi - center)
+        : Math.abs(midi - previousMidi) + Math.abs(midi - center) * 0.12;
+      return nextCost < bestCost ? midi : best;
+    });
+  };
+
+  const scoreMelody = (result) => {
+    const active = result.slice(0, patternLength)
+      .map((event, step) => (event ? { ...event, step } : null))
+      .filter(Boolean);
+    if (!active.length) return -Infinity;
+
+    const targetPerBar = Math.min(3.25, Math.max(0.6, stepsPerBar * 0.42));
+    const targetEvents = Math.min(
+      patternLength * 0.58,
+      barCount * targetPerBar * (0.82 + safeEnergy * 0.16),
+    );
+    let score = 100 - Math.abs(active.length - targetEvents) * 4;
+
+    const bassCollisions = active.filter(({ step }) => bassPattern[step]).length / active.length;
+    const backbeatCollisions = active.filter(({ step }) => snare[step] || clap[step]).length / active.length;
+    score -= bassCollisions * 42;
+    score -= backbeatCollisions * 34;
+
+    const syncopated = active.filter(({ step }) => {
+      const beat = step * stepBeats;
+      return Math.abs(beat - Math.round(beat)) > 0.001;
+    }).length / active.length;
+    if (stepBeats < 1) score -= Math.abs(syncopated - 0.58) * 16;
+
+    const rootPitchClass = ((rootMidi % 12) + 12) % 12;
+    const tonicShare = active.filter(({ midi }) => midi % 12 === rootPitchClass).length / active.length;
+    score -= Math.abs(tonicShare - 0.3) * 18;
+    if (active[0].midi % 12 === rootPitchClass) score += 6;
+    if (active.at(-1).midi % 12 === rootPitchClass) score += 10;
+
+    let descending = 0;
+    let moving = 0;
+    let repeatedRun = 1;
+    for (let index = 1; index < active.length; index += 1) {
+      const interval = active[index].midi - active[index - 1].midi;
+      if (interval !== 0) {
+        moving += 1;
+        if (interval < 0) descending += 1;
+      }
+      if (Math.abs(interval) > 12) score -= 20;
+      else if (Math.abs(interval) > 7) score -= 4;
+      repeatedRun = interval === 0 ? repeatedRun + 1 : 1;
+      if (repeatedRun > 2) score -= 7;
+      if (active[index].step - active[index - 1].step === 1
+        && index > 1
+        && active[index - 1].step - active[index - 2].step === 1) score -= 10;
+    }
+    if (moving) score -= Math.abs(descending / moving - 0.56) * 12;
+
+    for (let bar = 0; bar < barCount; bar += 1) {
+      const start = bar * stepsPerBar;
+      const limit = Math.min(stepsPerBar, patternLength - start);
+      const positions = active
+        .filter(({ step }) => step >= start && step < start + limit)
+        .map(({ step }) => step - start);
+      const edges = [-1, ...positions, limit];
+      let largestGap = 0;
+      for (let index = 1; index < edges.length; index += 1) {
+        largestGap = Math.max(largestGap, edges[index] - edges[index - 1] - 1);
+      }
+      score += largestGap * stepBeats >= 0.75 ? 3 : -6;
+    }
+
+    if (barCount > 1) {
+      const first = active.filter(({ step }) => step < stepsPerBar).map(({ step }) => step);
+      const second = active
+        .filter(({ step }) => step >= stepsPerBar && step < stepsPerBar * 2)
+        .map(({ step }) => step - stepsPerBar);
+      if (first.length && second.length) {
+        const similarity = jaccard(first, second);
+        score += similarity >= 0.35 && similarity <= 0.9
+          ? 10
+          : -Math.abs(similarity - 0.62) * 12;
+      }
+    }
+    return score;
+  };
+
+  let bestResult = null;
+  let bestScore = -Infinity;
+
+  for (let candidate = 0; candidate < 24; candidate += 1) {
+    const rng = createRng(`${seed}:melody-pattern:candidate:${candidate}`);
+    const result = Array(TOTAL_STEPS).fill(null);
+    const baseRhythm = MELODY_RHYTHM_MOTIFS[Math.floor(rng() * MELODY_RHYTHM_MOTIFS.length)];
+    let contrastRhythm = MELODY_RHYTHM_MOTIFS[Math.floor(rng() * MELODY_RHYTHM_MOTIFS.length)];
+    if (contrastRhythm === baseRhythm) {
+      contrastRhythm = MELODY_RHYTHM_MOTIFS[(MELODY_RHYTHM_MOTIFS.indexOf(baseRhythm) + 1) % MELODY_RHYTHM_MOTIFS.length];
+    }
+    const degreeMotif = [...MELODY_DEGREE_MOTIFS[Math.floor(rng() * MELODY_DEGREE_MOTIFS.length)]];
+    const tensionDegree = tensionDegrees[Math.floor(rng() * tensionDegrees.length)];
+    if (!degreeMotif.includes(tensionDegree) && degreeMotif.length > 1) degreeMotif[1] = tensionDegree;
+    const onsetSteps = [];
+
+    for (let bar = 0; bar < barCount; bar += 1) {
+      const role = phraseRole(bar, barCount);
+      const barStart = bar * stepsPerBar;
+      const localLimit = Math.min(stepsPerBar, patternLength - barStart);
+      if (localLimit <= 0) continue;
+      const source = role === "b" ? contrastRhythm : baseRhythm;
+      let local = uniqueSteps(
+        source.map((beat) => quantizedStep(beat, stepBeats)),
+        localLimit,
+      );
+      if (!local.length) local = [0];
+
+      if (role === "a-prime" && local.length > 1 && rng() < 0.35 + safeVariation * 0.5) {
+        const index = 1 + Math.floor(rng() * (local.length - 1));
+        local[index] = clamp(local[index] + (rng() < 0.5 ? -1 : 1), 0, localLimit - 1);
+      }
+      if (role === "fill" && localLimit > 1) {
+        local = local.slice(0, Math.max(1, local.length - 1));
+        local.push(localLimit - 1);
+      }
+
+      const activityChance = clamp(0.56 + safeEnergy * 0.2 + Math.min(1, stepsPerBar / 4) * 0.2, 0.58, 0.96);
+      if (stepsPerBar <= 2 && bar > 0 && bar < barCount - 1 && rng() > activityChance) continue;
+
+      const used = new Set();
+      local = uniqueSteps(local, localLimit).map((localStep) => {
+        const alternatives = uniqueSteps([localStep, localStep - 1, localStep + 1], localLimit)
+          .filter((step) => !used.has(step));
+        const chosen = (alternatives.length ? alternatives : [localStep])
+          .map((step) => ({
+            step,
+            cost: collisionCost(barStart + step) + Math.abs(step - localStep) * 0.75,
+          }))
+          .sort((left, right) => left.cost - right.cost || left.step - right.step)[0].step;
+        used.add(chosen);
+        return chosen;
+      });
+      local = uniqueSteps(local, localLimit);
+
+      const desired = clamp(
+        Math.round(Math.min(3.25, Math.max(0.65, localLimit * 0.42)) + (rng() - 0.5) * safeVariation),
+        1,
+        Math.min(4, localLimit),
+      );
+      while (local.length > desired) {
+        const removable = local
+          .map((step, index) => ({ step, index, cost: collisionCost(barStart + step) + (index === 0 ? -2 : 0) }))
+          .sort((left, right) => right.cost - left.cost || right.index - left.index)[0];
+        local.splice(removable.index, 1);
+      }
+      while (local.length < desired) {
+        const options = Array.from({ length: localLimit }, (_, step) => step)
+          .filter((step) => !local.includes(step))
+          .map((step) => ({
+            step,
+            cost: collisionCost(barStart + step)
+              + local.reduce((sum, existing) => sum + (Math.abs(existing - step) <= 1 ? 2 : 0), 0),
+          }))
+          .sort((left, right) => left.cost - right.cost || left.step - right.step);
+        if (!options.length) break;
+        local.push(options[0].step);
+      }
+      uniqueSteps(local, localLimit).forEach((localStep) => onsetSteps.push(barStart + localStep));
+    }
+
+    const activeSteps = uniqueSteps(onsetSteps, patternLength);
+    if (!activeSteps.length) activeSteps.push(0);
+    let previousMidi = null;
+    activeSteps.forEach((step, index) => {
+      const bar = Math.floor(step / stepsPerBar);
+      const role = phraseRole(bar, barCount);
+      const localIndex = activeSteps
+        .filter((candidateStep) => candidateStep >= bar * stepsPerBar && candidateStep <= step)
+        .length - 1;
+      let degree = degreeMotif[localIndex % degreeMotif.length];
+      if (role === "b" && localIndex === 0) degree = 4;
+      if (role === "a-prime" && localIndex > 0 && rng() < safeVariation * 0.36) {
+        degree += rng() < 0.5 ? -1 : 1;
+      }
+      const isFinal = index === activeSteps.length - 1;
+      const isResolvingBar = role === "fill"
+        && (activeSteps[index + 1] == null || activeSteps[index + 1] >= (bar + 1) * stepsPerBar);
+      if (isFinal || isResolvingBar) degree = 0;
+      const raised = role === "b" && localIndex === 0 && safeEnergy > 0.62 && rng() < 0.3;
+      const midi = voiceLedMidi(degree, previousMidi, raised);
+      const nextStep = activeSteps[index + 1] ?? patternLength;
+      const available = Math.max(1, nextStep - step);
+      const articulation = 0.42 + rng() * (0.36 + safeVariation * 0.12);
+      const lengthInSteps = clamp(Math.round(available * articulation), 1, available);
+      const metricAccent = Math.abs((step * stepBeats) % 1) < 0.001;
+      const velocity = clamp(
+        0.54 + (metricAccent ? 0.08 : 0) + (localIndex === 0 ? 0.05 : 0) + (rng() - 0.5) * 0.12,
+        0.46,
+        0.88,
+      );
+      result[step] = {
+        note: midiToNote(midi),
+        midi,
+        velocity,
+        length: lengthInSteps,
+      };
+      previousMidi = midi;
+    });
+
+    const candidateScore = scoreMelody(result);
+    if (candidateScore > bestScore) {
+      bestResult = result;
+      bestScore = candidateScore;
+    }
+  }
+
+  return bestResult ?? Array(TOTAL_STEPS).fill(null);
+}
+
 export function generateBassSound({
   seed,
   energy = 0.68,
@@ -846,6 +1129,17 @@ export function bassSummary(pattern, length = TOTAL_STEPS) {
   return {
     events: events.length,
     slides: events.filter((event) => event.slide).length,
+    range: events.length
+      ? `${midiToNote(Math.min(...events.map((event) => event.midi)))}–${midiToNote(Math.max(...events.map((event) => event.midi)))}`
+      : "—",
+  };
+}
+
+export function melodySummary(pattern, length = TOTAL_STEPS) {
+  const events = (pattern ?? []).slice(0, length).filter(Boolean);
+  return {
+    events: events.length,
+    held: events.filter((event) => event.length >= 3).length,
     range: events.length
       ? `${midiToNote(Math.min(...events.map((event) => event.midi)))}–${midiToNote(Math.max(...events.map((event) => event.midi)))}`
       : "—",
