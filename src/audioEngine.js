@@ -1,4 +1,10 @@
 import * as Tone from "tone";
+import {
+  isAppleMobile,
+  primeAudioContext,
+  selectPlaybackAudioSession,
+  waitForAudioUnlock,
+} from "./audioLifecycle.js";
 import { DEFAULT_MELODY_SOUND, DRUM_LANES, getRate } from "./music.js";
 
 const dbForVelocity = (velocity) => Math.max(0.05, Math.min(1, velocity));
@@ -430,6 +436,7 @@ class DrumRack {
 export class AudioEngine {
   constructor() {
     this.initialized = false;
+    this.contextPrepared = false;
     this.transportEvent = null;
     this.step = 0;
     this.getState = null;
@@ -438,8 +445,44 @@ export class AudioEngine {
     this.rateId = "16n";
   }
 
+  async ensureAudioReady() {
+    const appleMobile = isAppleMobile();
+    if (appleMobile) selectPlaybackAudioSession();
+
+    // Tone creates its shared context while its module is evaluated. On iOS,
+    // replace that suspended context inside the first playback gesture so
+    // Safari associates the real audio graph with the user's tap.
+    if (!this.contextPrepared && !this.initialized) {
+      const currentContext = Tone.getContext();
+      if (appleMobile && currentContext.state !== "running") {
+        Tone.setContext(new Tone.Context({ latencyHint: "interactive" }), true);
+      }
+      this.contextPrepared = true;
+    }
+
+    const context = Tone.getContext();
+    const nativeContext = context.rawContext;
+    primeAudioContext(nativeContext);
+
+    try {
+      await waitForAudioUnlock(
+        () => Tone.start(),
+        () => Tone.getContext().state,
+      );
+    } catch (error) {
+      if (appleMobile) {
+        throw new Error("Safari could not unlock audio. Tap Play again and make sure media volume is up.");
+      }
+      throw error;
+    }
+
+    // A one-frame silent source forces WebKit to attach the running context
+    // to its hardware output route without creating an audible click.
+    primeAudioContext(nativeContext);
+  }
+
   async initialize() {
-    await Tone.start();
+    await this.ensureAudioReady();
     if (this.initialized) return;
 
     this.input = new Tone.Gain(0.82);
@@ -620,5 +663,6 @@ export class AudioEngine {
       .filter(Boolean)
       .forEach((node) => node.dispose());
     this.initialized = false;
+    this.contextPrepared = false;
   }
 }
