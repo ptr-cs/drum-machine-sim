@@ -32,7 +32,7 @@ npm run build
 
 ## Generative controls
 
-The drum generator uses a constrained drill rhythm grammar: a half-time snare anchor, sparse syncopated kicks, alternating hats, occasional rolls, open-hat calls, and restrained secondary percussion. It composes in beat time and then quantizes to the selected grid, so both `1/16T` and `1/8T` are real triplet grids rather than visual approximations.
+The drum generator uses a constrained syncopated rhythm grammar: a half-time snare anchor, sparse kicks, alternating hats, occasional rolls, open-hat calls, and restrained secondary percussion. It composes in beat time and then quantizes to the selected grid, so both `1/16T` and `1/8T` are real triplet grids rather than visual approximations.
 
 The bass generator follows existing kick accents, stays in the selected scale, favors tonic-centered motifs, enforces breathing room, and limits slides to useful transitions. Every result is deterministic from the visible seed.
 
@@ -42,23 +42,13 @@ The three bass buttons are deliberately independent:
 - **Generate sound** changes only the synth patch and preserves every note.
 - **Generate both** changes the pattern and sound together.
 
-The global **Generate groove** control chooses a fresh 140–150 BPM drill tempo, root, and minor-mode scale, then replaces drums, bass notes, and the bass voice as one coherent, undoable operation. It generates the drums first so the new bass phrase can lock to the new kick pattern and uses the newly selected key for every bass note.
+The global **Generate groove** control chooses a fresh tempo from its tuned 140–150 BPM range, root, and minor-mode scale, then replaces drums, bass notes, and the bass voice as one coherent, undoable operation. It generates the drums first so the new bass phrase can lock to the new kick pattern and uses the newly selected key for every bass note.
 
 **MIDI** exports a format-1 `.mid` file with a tempo/conductor track, GM-mapped drums on channel 10, and bass on channel 1. Timing uses 480 PPQ, which represents every supported straight, sixteenth-triplet, and eighth-triplet step exactly. Bass gates, velocities, and slide overlaps are retained; portamento controllers are included for glide-aware instruments. The **½ tempo** option doubles all MIDI note spacing and gate lengths, producing a clip that is twice as long while retaining the project BPM marker for reliable DAW import. Export filenames include the seed, export mode, and a sortable UTC timestamp down to milliseconds, so rapid exports do not overwrite one another.
 
 Every generation can be undone, and generated state is reproducible through the seed and exported project JSON.
 
-## Drill study profile
-
-The initial profile draws on shared rhythmic and low-end traits heard across work by Sha Gz, Kay Flock, and Edot Babyy: roughly 140–150 BPM, a strong half-time pocket, syncopated kick/808 relationships, short pockets of negative space, melodic but restrained slides, and small hat bursts near transitions. These are generalized genre rules, not transcriptions or attempts to reproduce a specific recording.
-
-Representative references used during the design pass:
-
-- [Sha Gz — “New Opp”](https://www.youtube.com/watch?v=mnYttEgWNfA)
-- [Kay Flock — “Is Ya Ready”](https://www.youtube.com/watch?v=gGJS8W9emac)
-- [Edot Babyy — “Ready 4 War”](https://www.youtube.com/watch?v=3ShbbU4iMKE)
-- [Pitchfork on Edot Babyy’s “Body”](https://pitchfork.com/thepitch/edot-baby-body-new-song-listen/)
-- [Roland TR-808 technical specifications](https://support.roland.com/hc/en-us/articles/201963539-TR-808-Technical-Specifications)
+## Design note
 
 The original TR-808 did not include a chromatic melodic bass synth. The bass workspace models the modern tuned, sustained “808” role separately from the short percussion kick.
 
