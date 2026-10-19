@@ -28,6 +28,7 @@ import {
   stepGroupSize,
 } from "./music.js";
 import { downloadMidiFile } from "./midiExport.js";
+import { MELODY_ENABLED_VERSION, melodyEnabledForProject } from "./projectState.js";
 import "./styles.css";
 
 const STORAGE_KEY = "808-drill-lab:v1";
@@ -100,7 +101,8 @@ function createStarterProject() {
     drums,
     bass,
     melody,
-    melodyEnabled: false,
+    melodyEnabled: true,
+    melodyEnabledVersion: MELODY_ENABLED_VERSION,
     melodyMixVersion: MELODY_MIX_VERSION,
     melodyContentVersion: MELODY_CONTENT_VERSION,
     bassSound: generateBassSound({ seed, energy: 0.7, pattern: bass, length: 64 }),
@@ -130,6 +132,8 @@ function loadProject() {
     return {
       ...fallback,
       ...stored,
+      melodyEnabled: melodyEnabledForProject(stored),
+      melodyEnabledVersion: MELODY_ENABLED_VERSION,
       melodyMixVersion: MELODY_MIX_VERSION,
       melodyContentVersion: MELODY_CONTENT_VERSION,
       drums,
@@ -587,7 +591,7 @@ function MelodySoundBay({ project, onParam, onWave, onToggle, onAudition }) {
       >
         <span className="status-dot" />
         <b>Melody {project.melodyEnabled ? "on" : "off"}</b>
-        <small>{project.melodyEnabled ? "included in playback + MIDI" : "silent by default"}</small>
+        <small>{project.melodyEnabled ? "included in playback + MIDI" : "excluded from playback + MIDI"}</small>
       </button>
       <div className="wave-switch" role="group" aria-label="Melody oscillator wave">
         {["triangle", "sine"].map((wave) => (
@@ -1186,6 +1190,8 @@ function App() {
       setProject({
         ...fallback,
         ...parsed,
+        melodyEnabled: melodyEnabledForProject(parsed),
+        melodyEnabledVersion: MELODY_ENABLED_VERSION,
         drums,
         bass,
         bassSound: { ...fallback.bassSound, ...parsed.bassSound },
