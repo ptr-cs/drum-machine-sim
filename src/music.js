@@ -69,12 +69,12 @@ export const DEFAULT_MELODY_SOUND = {
   decay: 0.22,
   sustain: 0.16,
   release: 0.55,
-  cutoff: 1450,
+  cutoff: 1850,
   resonance: 3.4,
   highpass: 170,
   delay: 0.12,
   space: 0.18,
-  level: 0.2,
+  level: 0.36,
 };
 
 export const DEFAULT_DRUM_SETTINGS = Object.fromEntries(

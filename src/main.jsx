@@ -21,7 +21,6 @@ import {
   SCALES,
   STEP_RATES,
   TOTAL_STEPS,
-  emptyMelody,
   getRootMidi,
   midiToNote,
   noteToMidi,
@@ -32,6 +31,7 @@ import { downloadMidiFile } from "./midiExport.js";
 import "./styles.css";
 
 const STORAGE_KEY = "808-drill-lab:v1";
+const MELODY_MIX_VERSION = 2;
 
 function cloneDrumSettings() {
   return Object.fromEntries(
@@ -58,6 +58,17 @@ function createStarterProject() {
     energy: 0.7,
     slides: 0.56,
   });
+  const melody = generateMelodyPattern({
+    seed,
+    drums,
+    bass,
+    root: "F#",
+    scale: "minor",
+    rateId: "16n",
+    length: 64,
+    energy: 0.7,
+    variation: 0.56,
+  });
   return {
     version: 1,
     seed,
@@ -73,8 +84,9 @@ function createStarterProject() {
     slides: 0.56,
     drums,
     bass,
-    melody: emptyMelody(),
+    melody,
     melodyEnabled: false,
+    melodyMixVersion: MELODY_MIX_VERSION,
     bassSound: generateBassSound({ seed, energy: 0.7, pattern: bass, length: 64 }),
     melodySound: { ...DEFAULT_MELODY_SOUND },
     drumSettings: cloneDrumSettings(),
@@ -88,13 +100,19 @@ function loadProject() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (!stored || stored.version !== 1) return fallback;
+    const melodySound = { ...fallback.melodySound, ...stored.melodySound };
+    if ((stored.melodyMixVersion ?? 0) < MELODY_MIX_VERSION) {
+      melodySound.level = Math.max(melodySound.level, DEFAULT_MELODY_SOUND.level);
+      melodySound.cutoff = Math.max(melodySound.cutoff, DEFAULT_MELODY_SOUND.cutoff);
+    }
     return {
       ...fallback,
       ...stored,
+      melodyMixVersion: MELODY_MIX_VERSION,
       drums: { ...fallback.drums, ...stored.drums },
       melody: Array.isArray(stored.melody) ? stored.melody : fallback.melody,
       bassSound: { ...fallback.bassSound, ...stored.bassSound },
-      melodySound: { ...fallback.melodySound, ...stored.melodySound },
+      melodySound,
       drumSettings: Object.fromEntries(
         DRUM_LANES.map(({ id }) => [
           id,
@@ -885,6 +903,31 @@ function App() {
     setProject((current) => ({ ...current, seed, melody }));
   };
 
+  const toggleMelody = () => {
+    setProject((current) => {
+      const melodyEnabled = !current.melodyEnabled;
+      if (!melodyEnabled) return { ...current, melodyEnabled };
+
+      const hasNotes = (current.melody ?? []).some(Boolean);
+      const melody = hasNotes ? current.melody : generateMelodyPattern({
+        seed: current.seed,
+        drums: current.drums,
+        bass: current.bass,
+        root: current.root,
+        scale: current.scale,
+        rateId: current.rateId,
+        length: current.length,
+        energy: current.energy,
+        variation: current.variation,
+      });
+      return {
+        ...current,
+        melody,
+        melodyEnabled,
+      };
+    });
+  };
+
   const generateGroove = () => {
     captureUndo();
     const seed = makeSeed("full-groove");
@@ -1115,10 +1158,18 @@ function App() {
       const parsed = JSON.parse(await file.text());
       if (!parsed.drums || !parsed.bass || !parsed.bassSound) throw new Error("Not a Drum Machine Sim file.");
       const fallback = createStarterProject();
+      const melodySound = { ...fallback.melodySound, ...parsed.melodySound };
+      if ((parsed.melodyMixVersion ?? 0) < MELODY_MIX_VERSION) {
+        melodySound.level = Math.max(melodySound.level, DEFAULT_MELODY_SOUND.level);
+        melodySound.cutoff = Math.max(melodySound.cutoff, DEFAULT_MELODY_SOUND.cutoff);
+      }
       setProject({
         ...fallback,
         ...parsed,
         bassSound: { ...fallback.bassSound, ...parsed.bassSound },
+        melody: Array.isArray(parsed.melody) ? parsed.melody : fallback.melody,
+        melodySound,
+        melodyMixVersion: MELODY_MIX_VERSION,
         version: 1,
       });
       setPlayhead(-1);
@@ -1249,14 +1300,14 @@ function App() {
                 project={project}
                 onParam={setMelodyParam}
                 onWave={(wave) => setMelodyParam("wave", wave)}
-                onToggle={() => updateProject("melodyEnabled", !project.melodyEnabled)}
+                onToggle={toggleMelody}
                 onAudition={() => auditionMelody()}
               />
               <section className="bass-center-stack melody-center-stack">
                 <section className="bay sequencer-bay bass-sequencer-bay melody-sequencer-bay">
                   <div className="bay-topline">
                     <div><span className="bay-kicker">sequence</span><h3>Motif lane</h3></div>
-                    <button className={`bass-mute melody-output-toggle ${project.melodyEnabled ? "active" : ""}`} type="button" aria-pressed={project.melodyEnabled} onClick={() => updateProject("melodyEnabled", !project.melodyEnabled)}>{project.melodyEnabled ? "MELODY ON" : "MELODY OFF"}</button>
+                    <button className={`bass-mute melody-output-toggle ${project.melodyEnabled ? "active" : ""}`} type="button" aria-pressed={project.melodyEnabled} onClick={toggleMelody}>{project.melodyEnabled ? "MELODY ON" : "MELODY OFF"}</button>
                   </div>
                   <MelodyGrid project={project} bank={bank} playhead={playhead} selectedStep={selectedMelodyStep} onSelectStep={selectMelodyStep} onDeleteStep={deleteMelodyStep} />
                 </section>

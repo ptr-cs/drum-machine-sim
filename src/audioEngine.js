@@ -3,6 +3,7 @@ import { DEFAULT_MELODY_SOUND, DRUM_LANES, getRate } from "./music.js";
 
 const dbForVelocity = (velocity) => Math.max(0.05, Math.min(1, velocity));
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+const MELODY_OUTPUT_TRIM = 0.68;
 
 class BassVoice {
   constructor(destination) {
@@ -147,7 +148,7 @@ class MelodyVoice {
       preDelay: 0.025,
       wet: DEFAULT_MELODY_SOUND.space,
     });
-    this.output = new Tone.Gain(DEFAULT_MELODY_SOUND.level * 0.42);
+    this.output = new Tone.Gain(DEFAULT_MELODY_SOUND.level * MELODY_OUTPUT_TRIM);
     this.synth.chain(
       this.lowpass,
       this.highpass,
@@ -199,7 +200,7 @@ class MelodyVoice {
     this.highpass.frequency.rampTo(normalized.highpass, ramp, startTime);
     this.delay.wet.rampTo(normalized.delay, ramp, startTime);
     this.reverb.wet.rampTo(normalized.space, ramp, startTime);
-    this.output.gain.rampTo(normalized.level * 0.42, ramp, startTime);
+    this.output.gain.rampTo(normalized.level * MELODY_OUTPUT_TRIM, ramp, startTime);
     this.currentSound = normalized;
   }
 
