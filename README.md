@@ -1,3 +1,6 @@
+<img width="1920" height="1080" alt="Screenshot 2026-10-19 at 7 46 55 AM" src="https://github.com/user-attachments/assets/bf1f76dd-0273-457f-acc2-3ccd41dd0635" />
+
+
 # Drum Machine Sim
 
 A local, synthesized 808 bass and percussion instrument with a shared 64-step sequencer. It is built with React, Vite, and Tone.js and does not use drum samples or a hosted backend.
