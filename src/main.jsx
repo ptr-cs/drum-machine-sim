@@ -32,11 +32,26 @@ import "./styles.css";
 
 const STORAGE_KEY = "808-drill-lab:v1";
 const MELODY_MIX_VERSION = 2;
+const MELODY_CONTENT_VERSION = 1;
 
 function cloneDrumSettings() {
   return Object.fromEntries(
     Object.entries(DEFAULT_DRUM_SETTINGS).map(([id, settings]) => [id, { ...settings }]),
   );
+}
+
+function generateProjectMelody(project) {
+  return generateMelodyPattern({
+    seed: project.seed,
+    drums: project.drums,
+    bass: project.bass,
+    root: project.root,
+    scale: project.scale,
+    rateId: project.rateId,
+    length: project.length,
+    energy: project.energy,
+    variation: project.variation,
+  });
 }
 
 function createStarterProject() {
@@ -87,6 +102,7 @@ function createStarterProject() {
     melody,
     melodyEnabled: false,
     melodyMixVersion: MELODY_MIX_VERSION,
+    melodyContentVersion: MELODY_CONTENT_VERSION,
     bassSound: generateBassSound({ seed, energy: 0.7, pattern: bass, length: 64 }),
     melodySound: { ...DEFAULT_MELODY_SOUND },
     drumSettings: cloneDrumSettings(),
@@ -105,12 +121,20 @@ function loadProject() {
       melodySound.level = Math.max(melodySound.level, DEFAULT_MELODY_SOUND.level);
       melodySound.cutoff = Math.max(melodySound.cutoff, DEFAULT_MELODY_SOUND.cutoff);
     }
+    const drums = { ...fallback.drums, ...stored.drums };
+    const bass = Array.isArray(stored.bass) ? stored.bass : fallback.bass;
+    let melody = Array.isArray(stored.melody) ? stored.melody : fallback.melody;
+    if ((stored.melodyContentVersion ?? 0) < MELODY_CONTENT_VERSION && !melody.some(Boolean)) {
+      melody = generateProjectMelody({ ...fallback, ...stored, drums, bass });
+    }
     return {
       ...fallback,
       ...stored,
       melodyMixVersion: MELODY_MIX_VERSION,
-      drums: { ...fallback.drums, ...stored.drums },
-      melody: Array.isArray(stored.melody) ? stored.melody : fallback.melody,
+      melodyContentVersion: MELODY_CONTENT_VERSION,
+      drums,
+      bass,
+      melody,
       bassSound: { ...fallback.bassSound, ...stored.bassSound },
       melodySound,
       drumSettings: Object.fromEntries(
@@ -909,17 +933,7 @@ function App() {
       if (!melodyEnabled) return { ...current, melodyEnabled };
 
       const hasNotes = (current.melody ?? []).some(Boolean);
-      const melody = hasNotes ? current.melody : generateMelodyPattern({
-        seed: current.seed,
-        drums: current.drums,
-        bass: current.bass,
-        root: current.root,
-        scale: current.scale,
-        rateId: current.rateId,
-        length: current.length,
-        energy: current.energy,
-        variation: current.variation,
-      });
+      const melody = hasNotes ? current.melody : generateProjectMelody(current);
       return {
         ...current,
         melody,
@@ -1163,13 +1177,22 @@ function App() {
         melodySound.level = Math.max(melodySound.level, DEFAULT_MELODY_SOUND.level);
         melodySound.cutoff = Math.max(melodySound.cutoff, DEFAULT_MELODY_SOUND.cutoff);
       }
+      const drums = { ...fallback.drums, ...parsed.drums };
+      const bass = Array.isArray(parsed.bass) ? parsed.bass : fallback.bass;
+      let melody = Array.isArray(parsed.melody) ? parsed.melody : fallback.melody;
+      if ((parsed.melodyContentVersion ?? 0) < MELODY_CONTENT_VERSION && !melody.some(Boolean)) {
+        melody = generateProjectMelody({ ...fallback, ...parsed, drums, bass });
+      }
       setProject({
         ...fallback,
         ...parsed,
+        drums,
+        bass,
         bassSound: { ...fallback.bassSound, ...parsed.bassSound },
-        melody: Array.isArray(parsed.melody) ? parsed.melody : fallback.melody,
+        melody,
         melodySound,
         melodyMixVersion: MELODY_MIX_VERSION,
+        melodyContentVersion: MELODY_CONTENT_VERSION,
         version: 1,
       });
       setPlayhead(-1);
