@@ -234,6 +234,104 @@ test("melodies stay ominous, tonal, sparse, monophonic, and clear of the rhythm 
   }
 });
 
+test("melody phrases repeat, develop, and move with connected voice leading", () => {
+  let motifMatches = 0;
+  let rhythmSimilarity = 0;
+  let compactIntervals = 0;
+  let closeIntervals = 0;
+  let totalIntervals = 0;
+  let movingIntervals = 0;
+  let reversals = 0;
+  let balancedBars = 0;
+  let totalBars = 0;
+  let shapedPhrases = 0;
+  let connectedNotes = 0;
+  let shortGapNotes = 0;
+  let largestLeap = 0;
+  const sampleCount = 160;
+
+  const setSimilarity = (left, right) => {
+    const leftSet = new Set(left);
+    const rightSet = new Set(right);
+    const union = new Set([...leftSet, ...rightSet]);
+    return [...union].filter((value) => leftSet.has(value) && rightSet.has(value)).length
+      / Math.max(1, union.size);
+  };
+  const motifSignature = (events) => JSON.stringify({
+    rhythm: events.slice(1, 3).map((event, index) => event.step - events[index].step),
+    contour: events.slice(1, 3).map((event, index) => event.midi - events[index].midi),
+  });
+
+  for (let seedIndex = 0; seedIndex < sampleCount; seedIndex += 1) {
+    const seed = `flow-${seedIndex}`;
+    const root = NOTE_NAMES[seedIndex % NOTE_NAMES.length];
+    const scale = Object.keys(SCALES)[seedIndex % Object.keys(SCALES).length];
+    const drums = generateDrumPattern({ seed, rateId: "16n", length: 64 });
+    const bass = generateBassPattern({ seed, drums, root, scale, rateId: "16n", length: 64 });
+    const melody = generateMelodyPattern({
+      seed,
+      drums,
+      bass,
+      root,
+      scale,
+      rateId: "16n",
+      length: 64,
+      energy: 0.68,
+      variation: 0.56,
+    });
+    const active = melody.map((event, step) => (event ? { ...event, step } : null)).filter(Boolean);
+    const bars = Array.from({ length: 4 }, (_, bar) => active
+      .filter(({ step }) => step >= bar * 16 && step < (bar + 1) * 16)
+      .map((event) => ({ ...event, localStep: event.step - bar * 16 })));
+    const firstCell = bars[0].slice(0, 3);
+    const secondCell = bars[1].slice(0, 3);
+    if (firstCell.length === 3 && secondCell.length === 3
+      && motifSignature(firstCell) === motifSignature(secondCell)) motifMatches += 1;
+    rhythmSimilarity += setSimilarity(
+      bars[0].map(({ localStep }) => localStep),
+      bars[1].map(({ localStep }) => localStep),
+    );
+    bars.forEach((bar) => {
+      totalBars += 1;
+      if (bar.length >= 2 && bar.length <= 4) balancedBars += 1;
+    });
+
+    const signedIntervals = [];
+    const gaps = [];
+    active.slice(1).forEach((event, index) => {
+      const interval = event.midi - active[index].midi;
+      const absolute = Math.abs(interval);
+      const gap = event.step - active[index].step;
+      signedIntervals.push(interval);
+      gaps.push(gap);
+      totalIntervals += 1;
+      if (absolute <= 5) compactIntervals += 1;
+      if (absolute <= 7) closeIntervals += 1;
+      largestLeap = Math.max(largestLeap, absolute);
+      if (gap <= 4) {
+        shortGapNotes += 1;
+        if (active[index].length / gap >= 0.6) connectedNotes += 1;
+      }
+    });
+    const moving = signedIntervals.filter(Boolean);
+    movingIntervals += Math.max(0, moving.length - 1);
+    for (let index = 1; index < moving.length; index += 1) {
+      if (Math.sign(moving[index]) !== Math.sign(moving[index - 1])) reversals += 1;
+    }
+    if (gaps.some((gap) => gap <= 4) && gaps.some((gap) => gap >= 5)) shapedPhrases += 1;
+  }
+
+  assert.ok(motifMatches / sampleCount >= 0.9, "A and A′ should retain a recognizable three-note cell");
+  assert.ok(rhythmSimilarity / sampleCount >= 0.82, "A and A′ should share a stable pulse skeleton");
+  assert.ok(compactIntervals / totalIntervals >= 0.9, "most melody motion should stay within five semitones");
+  assert.ok(closeIntervals / totalIntervals >= 0.99, "nearly all melody motion should stay within seven semitones");
+  assert.ok(largestLeap <= 7, "melody should avoid abrupt register jumps");
+  assert.ok(reversals / movingIntervals <= 0.55, "melodic contours should not zig-zag randomly");
+  assert.ok(balancedBars / totalBars >= 0.95, "phrases should use compact two-to-four-note cells");
+  assert.ok(shapedPhrases / sampleCount >= 0.95, "phrases should contain both movement and breathing room");
+  assert.ok(connectedNotes / shortGapNotes >= 0.85, "nearby notes should use connected, flowing gates");
+});
+
 test("phrase labels explain straight and triplet loop lengths", () => {
   assert.equal(phraseLengthLabel(64, "16n"), "4 bars");
   assert.equal(phraseLengthLabel(48, "16t"), "2 bars");
